@@ -68,7 +68,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3")
+    // Pinned past the BOM: the BOM's stable material3 keeps the Expressive APIs internal.
+    implementation("androidx.compose.material3:material3:1.5.0-alpha27")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
