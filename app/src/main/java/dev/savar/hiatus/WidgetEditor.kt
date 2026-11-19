@@ -768,7 +768,7 @@ private fun ShapePicker(selected: ShapeKind, onPick: (ShapeKind) -> Unit) {
             Box(
                 Modifier.size(60.dp).clip(RoundedCornerShape(18.dp)).background(bg).clickable { onPick(k) }.padding(10.dp),
             ) {
-                val shape = remember(k) { WidgetRenderer.polygon(k).toShape() }
+                val shape = WidgetRenderer.polygon(k).toShape()
                 Box(Modifier.fillMaxSize().clip(shape).background(if (sel) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.35f)))
             }
         }
