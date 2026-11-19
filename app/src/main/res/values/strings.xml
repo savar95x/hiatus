@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hiatus</string>
+    <string name="widget_name">Away time</string>
+    <string name="widget_desc">Time away from your phone, screen time, unlocks and top apps. Resize to see more.</string>
+</resources>

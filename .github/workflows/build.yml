@@ -1,0 +1,80 @@
+name: Build Hiatus
+
+# Every push to main is build-checked. A GitHub Release is published only when
+# version.properties holds a version that hasn't been released yet.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tags to know which versions are already released
+
+      - name: Read version
+        id: version
+        run: |
+          v=$(grep -E '^VERSION_NAME=' version.properties | cut -d= -f2 | tr -d '[:space:]')
+          if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "::error::VERSION_NAME '$v' must look like 1.2.3"; exit 1; fi
+          echo "name=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "v$v is already released; this run only checks the build."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "v$v is new; this run will publish it."
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: current
+
+      - name: Build release APK
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Name APK
+        run: cp app/build/outputs/apk/release/app-release.apk "Hiatus-${{ steps.version.outputs.name }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hiatus-${{ steps.version.outputs.name }}-${{ github.sha }}
+          path: Hiatus-*.apk
+
+      - name: Release notes from CHANGELOG.md
+        if: steps.version.outputs.release == 'true'
+        run: |
+          v="${{ steps.version.outputs.name }}"
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" { on=1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "No CHANGELOG.md entry for $v." > notes.md; fi
+          cat notes.md
+
+      - name: Publish release
+        if: steps.version.outputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          name: Hiatus ${{ steps.version.outputs.name }}
+          body_path: notes.md
+          files: Hiatus-*.apk
+          make_latest: true
