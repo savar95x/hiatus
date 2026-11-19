@@ -6,7 +6,7 @@ Extra args are strings to look for in the dex (e.g. a new UI label) to confirm t
 """
 import sys, zipfile
 
-EXPECTED_SIGNER = "3FE9CDB09C99EA32D6DEE5B657AA5A7DC37F3877232BD66D59E403B606F592D0"  # app/release.jks
+EXPECTED_SIGNER = "F1840888C6CF4F975D0C1CE26903CAA4A2CA4287B7A8C052EA5B08AE79953EDB"  # app/release.jks
 
 try:
     from loguru import logger
