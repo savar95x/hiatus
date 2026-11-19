@@ -47,6 +47,10 @@ class HiatusWidget : AppWidgetProvider() {
         Widgets.refresh(context, intArrayOf(id)) { pr.finish() }
     }
 
+    override fun onDeleted(context: Context, ids: IntArray) {
+        ids.forEach { ConfigStore.delete(context, it) }
+    }
+
     override fun onEnabled(context: Context) = Refresher.schedule(context)
     override fun onDisabled(context: Context) = Refresher.cancel(context)
 
@@ -126,10 +130,40 @@ object Refresher {
 object Widgets {
     private val exec = Executors.newSingleThreadExecutor()
 
+    data class SizePx(val w: Int, val h: Int, val dp: Float, val wDp: Int, val hDp: Int)
+
     fun component(ctx: Context) = ComponentName(ctx, HiatusWidget::class.java)
 
     fun ids(ctx: Context): IntArray =
         AppWidgetManager.getInstance(ctx).getAppWidgetIds(component(ctx)) ?: IntArray(0)
+
+    /** A widget's size on the home screen; for [id] < 0 (no widget yet) a typical size for [style]. */
+    fun size(ctx: Context, id: Int, style: WidgetStyle = WidgetStyle.HERO): SizePx {
+        val portrait = ctx.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+        var wDp = 0
+        var hDp = 0
+        if (id >= 0) {
+            val o = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(id)
+            wDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+            hDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        }
+        if (wDp <= 0 || hDp <= 0) {
+            val (dw, dh) = when (style) {
+                WidgetStyle.HERO, WidgetStyle.RING, WidgetStyle.SHAPE -> 170 to 170
+                WidgetStyle.TILES, WidgetStyle.CHART -> 340 to 170
+                WidgetStyle.APPS -> 340 to 250
+                WidgetStyle.DASHBOARD -> 340 to 340
+            }
+            wDp = dw; hDp = dh
+        }
+        val density = ctx.resources.displayMetrics.density
+        var w = wDp * density
+        var h = hDp * density
+        var k = 1f
+        val maxPx = 1_200_000f // stay well inside the RemoteViews bitmap budget
+        if (w * h > maxPx) { k = sqrt(maxPx / (w * h)); w *= k; h *= k }
+        return SizePx(w.toInt(), h.toInt(), density * k, wDp, hDp)
+    }
 
     /** Recompute today's stats once and redraw [ids] (all widgets if null) off the main thread. */
     fun refresh(ctx: Context, ids: IntArray? = null, done: (() -> Unit)? = null) {
@@ -140,7 +174,7 @@ object Widgets {
                 if (targets.isNotEmpty()) {
                     val report = if (Usage.hasAccess(app)) runCatching { Usage.today(app) }.getOrNull() else null
                     val m = AppWidgetManager.getInstance(app)
-                    targets.forEach { draw(app, m, it, report) }
+                    targets.forEach { runCatching { draw(app, m, it, report) } }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -151,31 +185,35 @@ object Widgets {
     }
 
     private fun draw(ctx: Context, m: AppWidgetManager, id: Int, report: Report?) {
-        val o = m.getAppWidgetOptions(id)
-        val portrait = ctx.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
-        var wDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
-        var hDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-        if (wDp <= 0) wDp = 160
-        if (hDp <= 0) hDp = 160
-        val density = ctx.resources.displayMetrics.density
-        var w = wDp * density
-        var h = hDp * density
-        var k = 1f
-        val maxPx = 1_200_000f // stay well inside the RemoteViews bitmap budget
-        if (w * h > maxPx) { k = sqrt(maxPx / (w * h)); w *= k; h *= k }
-
-        val bmp = WidgetRenderer.render(ctx, w.toInt(), h.toInt(), density * k, wDp, hDp, report)
+        val cfg = ConfigStore.load(ctx, id)
+        val sz = size(ctx, id, cfg.style)
+        val bmp = WidgetRenderer.render(ctx, cfg, sz.w, sz.h, sz.dp, report)
         val rv = RemoteViews(ctx.packageName, R.layout.widget_root)
         rv.setImageViewBitmap(R.id.img, bmp)
-        rv.setContentDescription(R.id.img, WidgetRenderer.description(ctx, report))
-        rv.setOnClickPendingIntent(
-            android.R.id.background,
-            PendingIntent.getActivity(
-                ctx, 1,
-                Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            ),
-        )
+        rv.setContentDescription(R.id.img, WidgetRenderer.description(cfg, report))
+        tapIntent(ctx, cfg, id, report == null)?.let { rv.setOnClickPendingIntent(android.R.id.background, it) }
         m.updateAppWidget(id, rv)
+    }
+
+    private fun tapIntent(ctx: Context, cfg: WidgetConfig, id: Int, noAccess: Boolean): PendingIntent? {
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val open = PendingIntent.getActivity(
+            ctx, id * 4 + 1,
+            Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            flags,
+        )
+        if (noAccess) return open
+        return when (cfg.tapAction) {
+            TapAction.HIATUS -> open
+            TapAction.APP -> ctx.packageManager.getLaunchIntentForPackage(cfg.tapPackage)?.let {
+                PendingIntent.getActivity(ctx, id * 4 + 2, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
+            } ?: open
+            TapAction.REFRESH -> PendingIntent.getBroadcast(
+                ctx, id * 4 + 3,
+                Intent(ctx, HiatusWidget::class.java).setAction(HiatusWidget.ACTION_REFRESH),
+                flags,
+            )
+            TapAction.NONE -> null
+        }
     }
 }

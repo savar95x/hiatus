@@ -58,7 +58,6 @@ class Timeline(
 
 object Usage {
     private const val HOUR = 3_600_000L
-    private const val MIN_AWAY = 60_000L
 
     fun hasAccess(ctx: Context): Boolean {
         val aom = ctx.getSystemService(AppOpsManager::class.java) ?: return false
@@ -83,7 +82,7 @@ object Usage {
         val starts = (0..days).map { dayStart(now, it - days + 1) } // days + 1 boundaries
         val tl = timeline(ctx, starts.first() - 24 * HOUR, now)
         val stats = (0 until days).map { day(tl, starts[it], starts[it + 1]) }
-        return Report(now, lastAway(tl), stats)
+        return Report(now, lastAway(tl, AppPrefs.minBreakMinutes(ctx) * 60_000L), stats)
     }
 
     /** Just today, for the widget. */
@@ -170,18 +169,18 @@ object Usage {
         )
     }
 
-    /** The latest stretch of at least a minute without using the phone. */
-    fun lastAway(tl: Timeline): Away? {
+    /** The latest stretch of at least [minAway] ms without using the phone. */
+    fun lastAway(tl: Timeline, minAway: Long): Away? {
         val s = tl.sessions
         if (s.isEmpty()) return null
         if (!tl.inUseNow) {
             val since = s.last().e
-            if (tl.now - since >= MIN_AWAY) return Away(tl.now - since, since, tl.now, true)
+            if (tl.now - since >= minAway) return Away(tl.now - since, since, tl.now, true)
         }
         for (i in s.indices.reversed()) {
             if (i == 0) break
             val gap = s[i].s - s[i - 1].e
-            if (gap >= MIN_AWAY) return Away(gap, s[i - 1].e, s[i].s, false)
+            if (gap >= minAway) return Away(gap, s[i - 1].e, s[i].s, false)
         }
         return null
     }
@@ -268,18 +267,65 @@ object Usage {
 }
 
 object Fmt {
-    /** 47m · 2h 13m · 1d 4h */
-    fun dur(ms: Long): String {
+    fun dur(ms: Long, f: DurationFormat = DurationFormat.UNITS): String {
         val m = ms / 60_000
-        if (m < 1) return "0m"
         val h = m / 60
         val d = h / 24
-        return when {
-            d > 0 -> "${d}d ${h % 24}h"
-            h > 0 -> "${h}h ${m % 60}m"
-            else -> "${m}m"
+        return when (f) {
+            DurationFormat.UNITS -> when {
+                d > 0 -> "${d}d ${h % 24}h"
+                h > 0 -> "${h}h ${m % 60}m"
+                else -> "${m}m"
+            }
+            DurationFormat.LONG -> when {
+                d > 0 -> "$d day ${h % 24} hr"
+                h > 0 -> if (m % 60 == 0L) "$h hr" else "$h hr ${m % 60} min"
+                else -> "$m min"
+            }
+            DurationFormat.COLON -> "%d:%02d".format(h, m % 60)
+            DurationFormat.DECIMAL -> if (h == 0L) "${m}m" else "%.1fh".format(m / 60f)
         }
     }
 
     fun time(ctx: Context, t: Long): String = android.text.format.DateFormat.getTimeFormat(ctx).format(t)
+}
+
+/** A metric as text: the number, and a short line of context under it. */
+object Metrics {
+    fun isDuration(m: Metric) = m !in setOf(Metric.UNLOCKS, Metric.PICKUPS, Metric.SESSIONS)
+
+    fun value(m: Metric, r: Report, f: DurationFormat): String {
+        val t = r.today
+        return when (m) {
+            Metric.LAST_AWAY -> Fmt.dur(r.away?.ms ?: 0, f)
+            Metric.AWAY_TODAY -> Fmt.dur(t.awayMs, f)
+            Metric.SCREEN_TIME -> Fmt.dur(t.screenTimeMs, f)
+            Metric.UNLOCKS -> t.unlocks.toString()
+            Metric.PICKUPS -> t.pickups.toString()
+            Metric.PER_SESSION -> Fmt.dur(t.avgSessionMs, f)
+            Metric.LONGEST_AWAY -> Fmt.dur(t.longestAwayMs, f)
+            Metric.SESSIONS -> t.sessions.toString()
+        }
+    }
+
+    fun caption(ctx: Context, m: Metric, r: Report, f: DurationFormat): String {
+        val t = r.today
+        return when (m) {
+            Metric.LAST_AWAY -> {
+                val a = r.away
+                when {
+                    a == null -> "No break yet"
+                    a.ongoing -> "since " + Fmt.time(ctx, a.start)
+                    else -> Fmt.time(ctx, a.start) + " – " + Fmt.time(ctx, a.end)
+                }
+            }
+            Metric.AWAY_TODAY -> "longest " + Fmt.dur(t.longestAwayMs, f)
+            Metric.SCREEN_TIME -> "${t.unlocks} unlocks"
+            Metric.UNLOCKS -> if (t.unlocks == 0) "today" else "every " + Fmt.dur((t.end - t.start) / t.unlocks, f)
+            Metric.PICKUPS -> "${t.unlocks} unlocked"
+            Metric.PER_SESSION -> "${t.sessions} sessions"
+            Metric.LONGEST_AWAY -> "today"
+            Metric.SESSIONS -> Fmt.dur(t.avgSessionMs, f) + " each"
+        }
+    }
 }

@@ -10,26 +10,24 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:letterSpacing="0.12"
-        android:text="AWAY"
+        android:text="Last away"
         android:textColor="@color/widget_fg2"
-        android:textSize="12sp" />
+        android:textSize="13sp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fontFamily="monospace"
+        android:fontFamily="sans-serif-medium"
         android:gravity="center_vertical"
         android:text="2h 13m"
         android:textColor="@color/widget_accent"
-        android:textSize="32sp"
-        android:textStyle="bold" />
+        android:textSize="40sp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="since 11:42"
         android:textColor="@color/widget_fg2"
-        android:textSize="12sp" />
+        android:textSize="13sp" />
 </LinearLayout>
