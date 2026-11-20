@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.11.0] - 2026-11-20
+- The widget is called Hiatus in the widget picker.
+- Every widget size has its own layout: 1 × 1 shows just the number (on two lines when that's bigger); 4 × 1
+  puts the number on the left with the label and caption on the right; tall widgets stack the number; 4 × 2 and
+  bigger add a hairline strip of your day under the caption.
+- The corner decoration is now a thin, faint clock.
+- "Nothing below the number" is back to the number sitting at the bottom.
+- The time span reads "From 7:12 AM to 4:25 PM", with shorter wordings when the widget is narrow.
+- New number format: 2.8h.
+- Widget tab rebuilt like Minutia: preview, then Text, Fonts, Look and On tap, each opening its own page with
+  the preview pinned on top and a sideways slide between pages. Reset is in the ⋮ menu.
+- Fonts page: the number, the label and the line below the number each get their own typeface, weight and
+  size. Alignment is gone.
+- Home is calmer: green means away, everything else is neutral, and each app gets its own colour from its icon.
+  Icons removed from tiles and settings rows.
+
 ## [0.10.0] - 2026-11-20
 - Widget background is lighter again: between 0.7's surface and 0.8's near-black.
 - The corner shape is much smaller and fainter, tucked into the corner.

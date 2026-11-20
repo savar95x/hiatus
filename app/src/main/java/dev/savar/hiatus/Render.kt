@@ -191,7 +191,7 @@ object Renderer {
                 val full = p.measureText(t)
                 val last = i == options.lastIndex
                 if (full <= maxW) return t
-                if (full * 0.83f <= maxW || last) {
+                if (full * 0.87f <= maxW || last) {
                     // A hair under the exact ratio: text width doesn't scale perfectly linearly.
                     p.textSize = size0 * max(if (last) 0.75f else 0.85f, maxW / full * 0.98f)
                     return TextUtils.ellipsize(t, p, maxW, TextUtils.TruncateAt.END).toString()
