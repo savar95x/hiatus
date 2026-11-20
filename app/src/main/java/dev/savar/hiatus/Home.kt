@@ -485,9 +485,14 @@ private fun AppRow(pkg: String, amount: String, sub: String, frac: Float) {
             }
             Spacer(Modifier.height(5.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(50)).background(scheme.surfaceContainerHighest)) {
-                    Box(Modifier.fillMaxWidth(frac.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(50)).background(color))
-                }
+                // Material 3's own linear indicator (thin, with its gap and end stop), the app's colour softened.
+                LinearProgressIndicator(
+                    progress = { frac.coerceIn(0.02f, 1f) },
+                    modifier = Modifier.weight(1f),
+                    color = color,
+                    trackColor = scheme.surfaceContainerHighest,
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+                )
                 Spacer(Modifier.width(10.dp))
                 Text(sub, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
             }
@@ -520,8 +525,9 @@ internal object AppIcons {
         val base = colors[pkg] ?: fallback[(pkg.hashCode() and 0x7fffffff) % fallback.size]
         val hsv = FloatArray(3)
         android.graphics.Color.colorToHSV(base, hsv)
-        hsv[1] = hsv[1].coerceIn(0.35f, 0.65f)
-        hsv[2] = if (dark) 0.88f else 0.62f
+        // Soft, like a Material tonal colour: a hint of the app's hue rather than its full brand colour.
+        hsv[1] = hsv[1].coerceIn(0.2f, 0.38f)
+        hsv[2] = if (dark) 0.84f else 0.58f
         return Color(android.graphics.Color.HSVToColor(hsv))
     }
 
