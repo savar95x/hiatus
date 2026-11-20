@@ -102,7 +102,9 @@ class Screenshots {
         compose.mainClock.autoAdvance = false
         compose.setContent { HiatusTheme { content() } }
         repeat(4) { compose.mainClock.advanceTimeBy(800); Thread.sleep(150) }
+        compose.mainClock.autoAdvance = true
         after()
+        compose.waitForIdle()
         repeat(4) { compose.mainClock.advanceTimeBy(800); Thread.sleep(150) }
         save(compose.onRoot().captureToImage().asAndroidBitmap(), name)
     }

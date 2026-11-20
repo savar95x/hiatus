@@ -191,8 +191,9 @@ object Renderer {
                 val full = p.measureText(t)
                 val last = i == options.lastIndex
                 if (full <= maxW) return t
-                if (full * 0.85f <= maxW || last) {
-                    p.textSize = size0 * max(if (last) 0.75f else 0.85f, maxW / full)
+                if (full * 0.83f <= maxW || last) {
+                    // A hair under the exact ratio: text width doesn't scale perfectly linearly.
+                    p.textSize = size0 * max(if (last) 0.75f else 0.85f, maxW / full * 0.98f)
                     return TextUtils.ellipsize(t, p, maxW, TextUtils.TruncateAt.END).toString()
                 }
             }
@@ -246,7 +247,7 @@ object Renderer {
                     val one = fit(innerW, boxH, false)
                     val t = if (tall) fit(innerW, boxH, true) else 0f
                     two = t > one * (if (hd > wd * 1.25f) 1.15f else 1.3f)
-                    return max(one, t)
+                    return if (two) t else one
                 }
                 var size = best()
                 // Short widgets (2 × 1): room for the number first; drop the caption, then the label.
