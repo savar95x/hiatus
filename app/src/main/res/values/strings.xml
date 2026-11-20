@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">Hiatus</string>
     <string name="widget_name">Hiatus</string>
-    <string name="widget_desc">How long you've been away from your phone today.</string>
+    <string name="widget_desc">How long you\'ve been away from your phone today.</string>
 </resources>
