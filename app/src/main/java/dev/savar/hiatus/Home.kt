@@ -457,7 +457,7 @@ private fun Apps(day: Day) {
 }
 
 @Composable
-private fun AppRow(pkg: String, value: String, sub: String, frac: Float, color: Color) {
+private fun AppRow(pkg: String, amount: String, sub: String, frac: Float, color: Color) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val label = remember(pkg) { appLabel(ctx, pkg) }
@@ -477,7 +477,7 @@ private fun AppRow(pkg: String, value: String, sub: String, frac: Float, color: 
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, modifier = Modifier.weight(1f))
-                Text(value, style = MaterialTheme.typography.titleSmall)
+                Text(amount, style = MaterialTheme.typography.titleSmall)
             }
             Spacer(Modifier.height(5.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
