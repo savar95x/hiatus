@@ -379,7 +379,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                 ) {
                     when (shown) {
                         null -> {
-                            if (widgetIds.isNotEmpty() && (widgetIds.size > 1 || pinSupported)) {
+                            if (onDone == null && widgetIds.isNotEmpty() && (widgetIds.size > 1 || pinSupported)) {
                                 ChipFlow {
                                     widgetIds.forEachIndexed { i, id ->
                                         Chip(selected = id == selectedId, onClick = { selectedId = id }, label = {
@@ -398,7 +398,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                                     )
                                 }
                             }
-                            if (widgetIds.isEmpty()) Group {
+                            if (onDone == null && widgetIds.isEmpty()) Group {
                                 item {
                                     ListItem(
                                         leadingContent = { RowIcon(Icons.Rounded.Widgets) },
@@ -787,7 +787,7 @@ private fun LookCard(
     val corner by animateDpAsState(if (selected) 32.dp else 20.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "cardCorner")
     Column(
         modifier.clip(RoundedCornerShape(corner))
-            .background(if (selected) scheme.secondaryContainer else scheme.surfaceContainer)
+            .background(scheme.surfaceContainer)
             .clickable(onClick = onClick)
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -795,17 +795,17 @@ private fun LookCard(
         Box(
             Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(corner - 8.dp))
                 .background(Brush.linearGradient(listOf(scheme.primaryContainer, Color(0xFF1A1C22))))
-                .border(BorderStroke(2.dp, outline), RoundedCornerShape(corner - 8.dp)),
+                .border(BorderStroke(3.dp, outline), RoundedCornerShape(corner - 8.dp)),
         ) {
             Image(thumb, name, Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
         }
         Row(Modifier.padding(top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AnimatedVisibility(selected) {
-                Icon(Icons.Rounded.Check, null, tint = scheme.onSecondaryContainer, modifier = Modifier.padding(end = 4.dp).size(18.dp))
+                Icon(Icons.Rounded.Check, null, tint = scheme.primary, modifier = Modifier.padding(end = 4.dp).size(18.dp))
             }
             Text(
                 name, style = MaterialTheme.typography.labelLarge,
-                color = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant, maxLines = 1,
+                color = if (selected) scheme.primary else scheme.onSurfaceVariant, maxLines = 1,
             )
         }
     }

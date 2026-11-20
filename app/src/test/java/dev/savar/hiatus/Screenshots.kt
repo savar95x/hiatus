@@ -15,6 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -184,7 +186,7 @@ class Screenshots {
         screen("editor_content", false, after = {
             compose.onNodeWithText("Customise").performClick()
             compose.mainClock.advanceTimeBy(1_000)
-            compose.onNodeWithText("Content").performClick()
+            compose.onAllNodesWithText("Content").onFirst().performClick()
         }) { WidgetEditor(-1, r) }
     }
 

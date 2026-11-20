@@ -304,7 +304,7 @@ object WidgetRenderer {
         val labelBlock = if (showLabel) small * 1.9f else 0f
         val captionBlock = if (showCaption) small * 1.75f else 0f
         val numAvail = r.height() - labelBlock - captionBlock
-        val size = fitSize(value, r.width(), numAvail, cfg, f, maxCap = min(r.width(), r.height()) * 0.42f)
+        val size = fitSize(value, r.width(), numAvail, cfg, f, maxCap = min(r.width(), r.height()) * 0.36f)
         val capH = size * capRatio(f.number)
         if (center) {
             val group = labelBlock + capH + captionBlock
@@ -334,7 +334,7 @@ object WidgetRenderer {
         val diam = if (wide) r.height() else min(r.width(), r.height())
         val box = if (wide) RectF(r.left, r.top, r.left + diam, r.bottom)
         else RectF(r.centerX() - diam / 2, r.centerY() - diam / 2, r.centerX() + diam / 2, r.centerY() + diam / 2)
-        val stroke = diam * 0.075f
+        val stroke = (diam * 0.06f).coerceIn(5f * d, 14f * d)
         drawRing(c, box, stroke, frac, p.number, p.track, cfg.wavy)
 
         val inner = diam - stroke * 3.2f
@@ -386,8 +386,8 @@ object WidgetRenderer {
             if (frac >= 1f) c.drawOval(oval, pp) else c.drawArc(oval, -90f, max(sweep, 0.5f), false, pp)
             return
         }
-        val amp = stroke * 0.17f
-        val waves = (2 * PI * rad / (stroke * 4.6f)).roundToInt().coerceAtLeast(8)
+        val amp = stroke * 0.2f
+        val waves = (2 * PI * rad / (stroke * 3f)).roundToInt().coerceAtLeast(10)
         val path = Path()
         val steps = max(16, (sweep * 3).toInt())
         for (i in 0..steps) {
@@ -471,6 +471,15 @@ object WidgetRenderer {
         val cw = (r.width() - (cols - 1) * gap) / cols
         val ch = (r.height() - (rows - 1) * gap) / rows
         val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = p.tile }
+        val rowTile = ch < 64 * d && cw > 140 * d
+        val tlsBig = (ch * 0.14f).coerceIn(10.5f * d, 13f * d)
+        val inPadBig = min(14 * d, min(cw, ch) * 0.16f)
+        // Every tile's value at the same size: the largest that fits all of them.
+        val shared = (0 until n).minOf { i ->
+            val v = Metrics.value(stats[i], report, cfg.format)
+            if (rowTile) fitSize(v, (cw - 28 * d) * 0.5f, ch * 0.42f, cfg, f)
+            else fitSize(v, cw - 2 * inPadBig, ch - 2 * inPadBig - tlsBig * 1.7f, cfg, f, maxCap = ch * 0.34f)
+        }
         for (i in 0 until n) {
             val m = stats[i]
             val col = i % cols
@@ -481,22 +490,23 @@ object WidgetRenderer {
             val rad = min(16 * d, min(cw, ch) * 0.32f)
             c.drawRoundRect(cell, rad, rad, tp)
             val v = Metrics.value(m, report, cfg.format)
-            if (ch < 64 * d && cw > 140 * d) {
+            if (rowTile) {
                 // Row tile: label left, value right.
                 val inner = RectF(cell.left + 14 * d, cell.top, cell.right - 14 * d, cell.bottom)
                 val ls = 12.5f * d
-                val size = fitSize(v, inner.width() * 0.55f, ch * 0.42f, cfg, f)
+                val size = shared
                 val vw = richWidth(rich(v, cfg), size, f.number)
-                line(c, m.label, RectF(inner.left, 0f, inner.right - vw - 8 * d, 0f), cell.centerY() + ls * 0.36f, paint(ls, p.sub, f.label), false)
+                val lp = paint(ls, p.sub, f.label)
+                val room = inner.width() - vw - 8 * d
+                val lbl = if (lp.measureText(m.label) <= room) m.label else m.short
+                line(c, lbl, RectF(inner.left, 0f, inner.left + room, 0f), cell.centerY() + ls * 0.36f, lp, false)
                 numberAt(c, v, inner, cell.centerY() + size * capRatio(f.number) / 2, size, cfg, f, p.number, false, end = true)
             } else {
-                val inPad = min(14 * d, min(cw, ch) * 0.16f)
-                val inner = RectF(cell.left + inPad, cell.top + inPad, cell.right - inPad, cell.bottom - inPad)
-                val ls = (ch * 0.14f).coerceIn(10.5f * d, 13f * d)
-                line(c, m.label, inner, inner.top + ls, paint(ls, p.sub, f.label), false)
-                val avail = inner.height() - ls * 1.7f
-                val size = fitSize(v, inner.width(), avail, cfg, f, maxCap = ch * 0.34f)
-                numberAt(c, v, inner, inner.bottom, size, cfg, f, p.number, false)
+                val inner = RectF(cell.left + inPadBig, cell.top + inPadBig, cell.right - inPadBig, cell.bottom - inPadBig)
+                val lp = paint(tlsBig, p.sub, f.label)
+                val lbl = if (lp.measureText(m.label) <= inner.width()) m.label else m.short
+                line(c, lbl, inner, inner.top + tlsBig, lp, false)
+                numberAt(c, v, inner, inner.bottom, shared, cfg, f, p.number, false)
             }
         }
     }
@@ -506,10 +516,10 @@ object WidgetRenderer {
         val narrow = r.width() < 230 * d
         val ls = 13f * d
         val headH = (r.height() * 0.24f).coerceIn(22f * d, 36f * d)
-        if (cfg.showLabel) line(c, labelText(cfg, "Screen time"), RectF(r.left, 0f, r.centerX(), 0f), r.top + ls, paint(ls, p.sub, f.label), false)
+        if (cfg.showLabel && !narrow) line(c, labelText(cfg, "Screen time"), RectF(r.left, 0f, r.centerX(), 0f), r.top + ls, paint(ls, p.sub, f.label), false)
         val total = Fmt.dur(day.screenTimeMs, cfg.format)
-        val size = fitSize(total, r.width() * 0.5f, headH, cfg, f)
-        numberAt(c, total, r, r.top + size * capRatio(f.number), size, cfg, f, p.number, false, end = true)
+        val size = fitSize(total, if (narrow) r.width() else r.width() * 0.5f, headH, cfg, f)
+        numberAt(c, total, r, r.top + size * capRatio(f.number), size, cfg, f, p.number, false, end = !narrow)
         val axis = cfg.showCaption && r.height() > 110 * d
         val axisH = if (axis) 16 * d else 0f
         val top = r.top + headH + 12 * d

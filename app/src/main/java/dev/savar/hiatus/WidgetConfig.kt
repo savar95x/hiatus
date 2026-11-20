@@ -15,15 +15,15 @@ enum class WidgetStyle(val label: String) {
 }
 
 /** Everything a widget can show as a number. */
-enum class Metric(val label: String) {
-    LAST_AWAY("Last away"),
-    AWAY_TODAY("Away today"),
-    SCREEN_TIME("Screen time"),
-    UNLOCKS("Unlocks"),
-    PICKUPS("Screen wakes"),
-    PER_SESSION("Per session"),
-    LONGEST_AWAY("Longest away"),
-    SESSIONS("Sessions"),
+enum class Metric(val label: String, val short: String) {
+    LAST_AWAY("Last away", "Away"),
+    AWAY_TODAY("Away today", "Away"),
+    SCREEN_TIME("Screen time", "Screen"),
+    UNLOCKS("Unlocks", "Unlocks"),
+    PICKUPS("Screen wakes", "Wakes"),
+    PER_SESSION("Per session", "Session"),
+    LONGEST_AWAY("Longest away", "Longest"),
+    SESSIONS("Sessions", "Sessions"),
 }
 
 enum class FontSource(val label: String) {
