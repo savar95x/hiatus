@@ -44,7 +44,7 @@ class HiatusWidget : AppWidgetProvider() {
 
     override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, newOptions: Bundle) {
         val pr = goAsync()
-        Widgets.refresh(context, intArrayOf(id)) { pr.finish() }
+        Widgets.refresh(context, intArrayOf(id), fresh = false) { pr.finish() }
     }
 
     override fun onDeleted(context: Context, ids: IntArray) {
@@ -171,22 +171,65 @@ object Widgets {
         return SizePx(w.toInt(), h.toInt(), density * k, wDp, hDp)
     }
 
-    /** Recompute today's stats once and redraw [ids] (all widgets if null) off the main thread. */
-    fun refresh(ctx: Context, ids: IntArray? = null, done: (() -> Unit)? = null) {
+    // Requests are coalesced: while one redraw is queued, further requests just add their widget ids to it.
+    private val lock = Any()
+    private val pendingIds = LinkedHashSet<Int>()
+    private var pendingAll = false
+    private var pendingFresh = false
+    private var scheduled = false
+    private val callbacks = ArrayList<() -> Unit>()
+
+    // Last computed stats. Settings changes reuse them so the redraw is instant: reading 48 hours of usage events
+    // takes a second or two, long enough for Android to freeze the app if you go home right after an edit.
+    @Volatile private var cached: Report? = null
+    @Volatile private var cachedAt = 0L
+    private const val CACHE_MS = 90_000L
+
+    /** Share stats the app already computed (any number of days; widgets use today). */
+    fun remember(report: Report) {
+        cached = report
+        cachedAt = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Redraw [ids] (all widgets if null) off the main thread. [fresh] recomputes usage (screen-on, unlock, timer);
+     * otherwise recent stats are reused (settings edits).
+     */
+    fun refresh(ctx: Context, ids: IntArray? = null, fresh: Boolean = true, done: (() -> Unit)? = null) {
         val app = ctx.applicationContext
-        exec.execute {
-            try {
-                val targets = ids ?: ids(app)
-                if (targets.isNotEmpty()) {
-                    val report = if (Usage.hasAccess(app)) runCatching { Usage.today(app) }.getOrNull() else null
-                    val m = AppWidgetManager.getInstance(app)
-                    targets.forEach { runCatching { draw(app, m, it, report) } }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                done?.invoke()
+        synchronized(lock) {
+            if (ids == null) pendingAll = true else ids.forEach { pendingIds.add(it) }
+            pendingFresh = pendingFresh || fresh
+            done?.let { callbacks.add(it) }
+            if (scheduled) return
+            scheduled = true
+        }
+        exec.execute { drain(app) }
+    }
+
+    private fun drain(app: Context) {
+        val all: Boolean
+        val idsNow: List<Int>
+        val fresh: Boolean
+        val cbs: List<() -> Unit>
+        synchronized(lock) {
+            all = pendingAll; idsNow = pendingIds.toList(); fresh = pendingFresh; cbs = callbacks.toList()
+            pendingAll = false; pendingIds.clear(); pendingFresh = false; callbacks.clear(); scheduled = false
+        }
+        try {
+            val targets = if (all) ids(app).toList() else idsNow
+            if (targets.isEmpty()) return
+            val report = if (!Usage.hasAccess(app)) null else {
+                val c = cached
+                if (!fresh && c != null && SystemClock.elapsedRealtime() - cachedAt < CACHE_MS) c
+                else runCatching { Usage.today(app) }.getOrNull()?.also { remember(it) }
             }
+            val m = AppWidgetManager.getInstance(app)
+            targets.forEach { runCatching { draw(app, m, it, report) } }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            cbs.forEach { runCatching { it() } }
         }
     }
 
@@ -214,11 +257,6 @@ object Widgets {
             TapAction.APP -> ctx.packageManager.getLaunchIntentForPackage(cfg.tapPackage)?.let {
                 PendingIntent.getActivity(ctx, id * 4 + 2, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
             } ?: open
-            TapAction.REFRESH -> PendingIntent.getBroadcast(
-                ctx, id * 4 + 3,
-                Intent(ctx, HiatusWidget::class.java).setAction(HiatusWidget.ACTION_REFRESH),
-                flags,
-            )
             TapAction.NONE -> null
         }
     }

@@ -15,14 +15,15 @@ enum class WidgetStyle(val label: String) {
 }
 
 /** Everything a widget can show as a number. */
-enum class Metric(val label: String, val short: String) {
-    LAST_AWAY("Last away", "Away"),
-    AWAY_TODAY("Away today", "Away"),
+/** [away]: the app's main subject; these are offered first, the rest under "More stats". */
+enum class Metric(val label: String, val short: String, val away: Boolean = false) {
+    LAST_AWAY("Last away", "Away", away = true),
+    AWAY_TODAY("Away today", "Away", away = true),
     SCREEN_TIME("Screen time", "Screen"),
     UNLOCKS("Unlocks", "Unlocks"),
     PICKUPS("Screen wakes", "Wakes"),
     PER_SESSION("Per session", "Session"),
-    LONGEST_AWAY("Longest away", "Longest"),
+    LONGEST_AWAY("Longest away", "Longest", away = true),
     SESSIONS("Sessions", "Sessions"),
 }
 
@@ -86,14 +87,13 @@ enum class ShapeKind(val label: String) {
 enum class TapAction(val label: String) {
     HIATUS("Hiatus"),
     APP("App…"),
-    REFRESH("Refresh"),
     NONE("None"),
 }
 
 data class WidgetConfig(
     val style: WidgetStyle = WidgetStyle.HERO,
     val metric: Metric = Metric.LAST_AWAY,
-    val stats: List<Metric> = listOf(Metric.SCREEN_TIME, Metric.UNLOCKS, Metric.PER_SESSION, Metric.LONGEST_AWAY),
+    val stats: List<Metric> = listOf(Metric.AWAY_TODAY, Metric.LONGEST_AWAY, Metric.UNLOCKS, Metric.SCREEN_TIME),
     val showLabel: Boolean = true,
     val customLabel: String = "",
     val uppercaseLabel: Boolean = false,
@@ -105,7 +105,7 @@ data class WidgetConfig(
     val useWallpaperColors: Boolean = true,
     val role: ColorRole = ColorRole.PRIMARY,
     val theme: ThemeMode = ThemeMode.SYSTEM,
-    val bgColor: Int = 0xFF1B1D22.toInt(),
+    val bgColor: Int = 0xFF0E0F13.toInt(),
     val numberColor: Int = 0xFFB8C4FF.toInt(),
     val textColor: Int = 0xFFE4E2E6.toInt(),
     val background: Boolean = true,

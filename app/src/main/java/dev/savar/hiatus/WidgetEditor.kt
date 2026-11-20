@@ -324,7 +324,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
 
     fun commit() {
         ConfigStore.save(ctx, selectedId, cfg)
-        if (selectedId >= 0) Widgets.refresh(ctx, intArrayOf(selectedId))
+        if (selectedId >= 0) Widgets.refresh(ctx, intArrayOf(selectedId), fresh = false)
     }
     fun setLocal(c: WidgetConfig) { cfg = c }
     fun update(c: WidgetConfig) { cfg = c; commit() }
@@ -409,8 +409,8 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                                     )
                                 }
                             }
-                            SectionTitle("Looks")
-                            Presets.all.chunked(2).forEach { pair ->
+                            @Composable
+                            fun looks(list: List<Preset>) = list.chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     pair.forEach { pr ->
                                         val sel = matches(cfg, pr)
@@ -421,6 +421,13 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                                     }
                                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
+                            }
+                            SectionTitle("Looks")
+                            looks(Presets.away)
+                            var moreLooks by rememberSaveable { mutableStateOf(Presets.more.any { matches(cfg, it) }) }
+                            ShowMore("More looks", "Screen time, tiles, chart, apps", moreLooks) { moreLooks = !moreLooks }
+                            AnimatedVisibility(moreLooks) {
+                                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) { looks(Presets.more) }
                             }
                             Group {
                                 item {
@@ -434,7 +441,6 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                                     val v = when (cfg.tapAction) {
                                         TapAction.APP -> if (cfg.tapPackage.isEmpty()) "App" else remember(cfg.tapPackage) { appLabel(ctx, cfg.tapPackage) }
                                         TapAction.NONE -> "Nothing"
-                                        TapAction.REFRESH -> "Refresh"
                                         TapAction.HIATUS -> "Open Hiatus"
                                     }
                                     NavRow(Icons.Rounded.TouchApp, "On tap", v) { page = EditorPage.TAP }
@@ -491,12 +497,27 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
 
                         EditorPage.CONTENT -> {
                             val usesMetric = cfg.style !in setOf(WidgetStyle.TILES, WidgetStyle.CHART, WidgetStyle.APPS)
-                            if (usesMetric) Group("Number") {
+                            if (usesMetric) Group("Shows") {
                                 item {
                                     Pad {
+                                        var moreStats by rememberSaveable { mutableStateOf(!cfg.metric.away) }
                                         ChipFlow {
-                                            Metric.entries.forEach { m ->
+                                            Metric.entries.filter { it.away }.forEach { m ->
                                                 Chip(selected = cfg.metric == m, onClick = { update(cfg.copy(metric = m)) }, label = { Text(m.label) })
+                                            }
+                                        }
+                                        TextButton(onClick = { moreStats = !moreStats }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                                            Text(if (moreStats) "Fewer stats" else "More stats")
+                                            Icon(
+                                                if (moreStats) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null,
+                                                Modifier.padding(start = 4.dp).size(18.dp),
+                                            )
+                                        }
+                                        AnimatedVisibility(moreStats) {
+                                            ChipFlow {
+                                                Metric.entries.filter { !it.away }.forEach { m ->
+                                                    Chip(selected = cfg.metric == m, onClick = { update(cfg.copy(metric = m)) }, label = { Text(m.label) })
+                                                }
                                             }
                                         }
                                     }
@@ -760,6 +781,24 @@ private fun PreviewCard(cfg: WidgetConfig, id: Int, data: Report, fontVersion: I
             modifier = Modifier.align(Alignment.BottomEnd).clip(CircleShape)
                 .background(if (light) Color(0x1A000000) else Color(0x26FFFFFF)).padding(6.dp).size(16.dp),
         )
+    }
+}
+
+/** A quiet full-width row that expands a section. */
+@Composable
+private fun ShowMore(title: String, subtitle: String, open: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val turn by animateFloatAsState(if (open) 180f else 0f, label = "chevron")
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(scheme.surfaceContainer)
+            .clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+        }
+        Icon(Icons.Rounded.ExpandMore, null, tint = scheme.onSurfaceVariant, modifier = Modifier.rotate(turn))
     }
 }
 

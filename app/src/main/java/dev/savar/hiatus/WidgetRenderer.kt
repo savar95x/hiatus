@@ -62,6 +62,12 @@ object WidgetRenderer {
             Configuration.UI_MODE_NIGHT_YES
     }
 
+    private fun mix(a: Int, b: Int, t: Float) = Color.rgb(
+        (Color.red(a) + (Color.red(b) - Color.red(a)) * t).roundToInt(),
+        (Color.green(a) + (Color.green(b) - Color.green(a)) * t).roundToInt(),
+        (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t).roundToInt(),
+    )
+
     private fun alpha(c: Int, a: Float) =
         Color.argb((Color.alpha(c) * a).roundToInt().coerceIn(0, 255), Color.red(c), Color.green(c), Color.blue(c))
 
@@ -71,7 +77,7 @@ object WidgetRenderer {
         val p = if (!wallpaper) {
             val (bg, num, txt) = if (cfg.useWallpaperColors) {
                 // Wallpaper colours asked for, but the phone is older than Android 12.
-                if (dark) Triple(0xFF1B1D22.toInt(), 0xFFB8C4FF.toInt(), 0xFFE4E2E6.toInt())
+                if (dark) Triple(0xFF0E0F13.toInt(), 0xFFB8C4FF.toInt(), 0xFFE4E2E6.toInt())
                 else Triple(0xFFF3F3FA.toInt(), 0xFF4A5C92.toInt(), 0xFF1B1B1F.toInt())
             } else Triple(cfg.bgColor, cfg.numberColor, cfg.textColor)
             Palette(bg, num, txt, alpha(txt, 0.72f), alpha(num, 0.28f), alpha(txt, 0.09f))
@@ -86,13 +92,17 @@ object WidgetRenderer {
                 cfg.role == ColorRole.BLACK -> Palette(
                     Color.BLACK, s("accent1", 200), s("neutral1", 50), s("neutral2", 300), s("accent2", 800), s("neutral1", 900),
                 )
+                // Dark widgets sit near black, like OxygenOS's own dark UI.
                 cfg.role == ColorRole.SURFACE && dark -> Palette(
-                    s("neutral1", 900), s("accent1", 200), s("neutral1", 100), s("neutral2", 200), s("accent2", 700), s("neutral1", 800),
+                    mix(s("neutral1", 900), Color.BLACK, 0.5f), s("accent1", 200), s("neutral1", 100), s("neutral2", 200),
+                    s("accent2", 800), s("neutral1", 900),
                 )
                 cfg.role == ColorRole.SURFACE -> Palette(
                     s("neutral1", 50), s("accent1", 600), s("neutral1", 900), s("neutral2", 700), s("accent2", 100), s("neutral2", 100),
                 )
-                dark -> Palette(s(acc, 800), s(acc, 100), s(acc, 50), s(acc, 200), s(acc, 600), s(acc, 700))
+                dark -> Palette(
+                    mix(s(acc, 900), Color.BLACK, 0.25f), s(acc, 100), s(acc, 50), s(acc, 200), s(acc, 700), s(acc, 800),
+                )
                 else -> Palette(s(acc, 100), s(acc, 800), s(acc, 900), s(acc, 700), s(acc, 200), s(acc, 50))
             }
         }

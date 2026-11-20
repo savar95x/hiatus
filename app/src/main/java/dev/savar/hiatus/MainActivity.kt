@@ -237,6 +237,8 @@ import androidx.compose.ui.unit.lerp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -278,7 +280,8 @@ private fun Root(launchId: Int) {
             if (pulled) refreshing = true
             report = withContext(Dispatchers.Default) { runCatching { Usage.report(ctx) }.getOrNull() }
             refreshing = false
-            Widgets.refresh(ctx)
+            report?.let { Widgets.remember(it) }
+            Widgets.refresh(ctx, fresh = report == null)
         }
     }
 
@@ -287,6 +290,8 @@ private fun Root(launchId: Int) {
         if (granted) load(false) else { report = null; Widgets.refresh(ctx) }
         onPauseOrDispose { }
     }
+    // Leaving the app: make sure every widget shows the latest settings before Android freezes the process.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { Widgets.refresh(ctx, fresh = false) }
 
     var tab by rememberSaveable { mutableStateOf(if (launchId >= 0) Tab.WIDGETS else Tab.TODAY) }
     var settings by rememberSaveable { mutableStateOf(false) }

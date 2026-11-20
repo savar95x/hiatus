@@ -289,6 +289,22 @@ internal fun ColorScheme.pureBlack(): ColorScheme = copy(
     surfaceVariant = lerp(Color.Black, surfaceVariant, 0.7f),
 )
 
+/**
+ * Default dark theme, pulled close to black like OxygenOS's own dark apps (stock Material dark is a lighter
+ * grey-blue). Pure black goes all the way to #000.
+ */
+internal fun ColorScheme.deepDark(): ColorScheme = copy(
+    background = lerp(Color.Black, background, 0.3f),
+    surface = lerp(Color.Black, surface, 0.3f),
+    surfaceDim = lerp(Color.Black, surfaceDim, 0.3f),
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = lerp(Color.Black, surfaceContainerLow, 0.45f),
+    surfaceContainer = lerp(Color.Black, surfaceContainer, 0.55f),
+    surfaceContainerHigh = lerp(Color.Black, surfaceContainerHigh, 0.65f),
+    surfaceContainerHighest = lerp(Color.Black, surfaceContainerHighest, 0.75f),
+    surfaceVariant = lerp(Color.Black, surfaceVariant, 0.7f),
+)
+
 @Composable
 internal fun isAppDark(): Boolean = when (ThemePrefs.mode) {
     ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -307,7 +323,11 @@ fun HiatusTheme(content: @Composable () -> Unit) {
         dark -> darkColorScheme()
         else -> lightColorScheme()
     }
-    val scheme = if (dark && ThemePrefs.pureBlack) base.pureBlack() else base
+    val scheme = when {
+        !dark -> base
+        ThemePrefs.pureBlack -> base.pureBlack()
+        else -> base.deepDark()
+    }
     val activity = ctx as? android.app.Activity
     val view = LocalView.current
     SideEffect {

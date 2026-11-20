@@ -385,6 +385,12 @@ private fun HeroCard(r: Report) {
                     style = MaterialTheme.typography.bodyLarge,
                     color = scheme.onPrimaryContainer,
                 )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Away today ${Fmt.dur(r.today.awayMs)}  ·  longest ${Fmt.dur(r.today.longestAwayMs)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onPrimaryContainer.copy(alpha = 0.75f),
+                )
             }
             Spacer(Modifier.width(12.dp))
             Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
