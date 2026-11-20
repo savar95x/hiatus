@@ -245,62 +245,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class EditorPage(val title: String, val parent: EditorPage?) {
-    CUSTOMISE("Customise", null),
-    TAP("On tap", null),
-    STYLE("Style", CUSTOMISE),
-    CONTENT("Content", CUSTOMISE),
-    FONT("Font", CUSTOMISE),
-    COLOURS("Colours", CUSTOMISE),
-    LAYOUT("Layout", CUSTOMISE),
-}
-
-private fun depth(p: EditorPage?): Int = if (p == null) 0 else 1 + depth(p.parent)
-
-/** A preset counts as chosen while the look still matches it (font and tap action are the user's own). */
-private fun matches(cfg: WidgetConfig, preset: Preset): Boolean =
-    cfg.copy(font = preset.config.font, fontForLabels = preset.config.fontForLabels, tapAction = preset.config.tapAction, tapPackage = preset.config.tapPackage) == preset.config
-
-private fun applyPreset(cfg: WidgetConfig, preset: Preset): WidgetConfig =
-    preset.config.copy(font = cfg.font, fontForLabels = cfg.fontForLabels, tapAction = cfg.tapAction, tapPackage = cfg.tapPackage)
-
-/** Phone-use stretches matching an hourly minutes pattern: a couple of sessions inside each busy hour. */
-internal fun fakeUse(start: Long, end: Long, minutesPerHour: LongArray): List<Iv> {
-    val out = ArrayList<Iv>()
-    for (h in 0 until 24) {
-        val mins = minutesPerHour[h]
-        if (mins <= 0) continue
-        val hs = start + h * 3_600_000L
-        val a = hs + 6 * 60_000L
-        val first = (mins * 0.6).toLong()
-        out.add(Iv(a, a + first * 60_000L))
-        val b = hs + 38 * 60_000L
-        out.add(Iv(b, b + (mins - first) * 60_000L))
-    }
-    return out.filter { it.s < end }.map { Iv(it.s, minOf(it.e, end)) }
+private enum class EditorPage(val title: String) {
+    TEXT("Text"), FONT("Font"), COLOURS("Colours"), LAYOUT("Layout"), TAP("On tap"),
 }
 
 /** Plausible numbers so previews look right before usage access is granted. */
-internal fun sampleReport(ctx: Context): Report {
+internal fun sampleReport(): Report {
     val now = System.currentTimeMillis()
     val start = Usage.dayStart(now)
     val h = 3_600_000L
     val m = 60_000L
-    val pattern = longArrayOf(0, 0, 0, 0, 0, 0, 0, 8, 22, 14, 9, 18, 31, 26, 12, 10, 15, 21, 28, 35, 40, 33, 19, 6)
-    val hourNow = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-    val hourly = LongArray(24) { if (it <= hourNow) pattern[it] * m else 0 }
-    @Suppress("DEPRECATION")
-    val pkgs = runCatching {
-        ctx.packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-            .map { it.activityInfo.packageName }.filter { it != ctx.packageName }.distinct().take(6)
-    }.getOrDefault(emptyList())
-    val apps = pkgs.mapIndexed { i, p -> AppUsage(p, (95 - i * 15) * m) }
+    val elapsed = now - start
     val day = DayStats(
-        start = start, end = now, screenTimeMs = 3 * h + 41 * m, inUseMs = 3 * h + 52 * m, awayMs = 9 * h + 20 * m,
-        longestAwayMs = 7 * h + 12 * m, sessions = 46, unlocks = 58, pickups = 74, hourly = hourly, apps = apps,
-        use = fakeUse(start, now, hourly.map { it / m }.toLongArray()),
+        start = start, end = now, countedMs = elapsed, awayMs = (elapsed * 0.78).toLong(),
+        breaks = listOf(Iv(now - 3 * h, now - 50 * m)), unlocks = 58, firstUnlock = start + 7 * h + 40 * m,
     )
-    return Report(now, Away(2 * h + 13 * m, now - 2 * h - 23 * m, now - 10 * m, false), listOf(day))
+    return Report(now, Away(2 * h + 10 * m, now - 3 * h, now - 50 * m, false), listOf(day))
 }
 
 private fun fontName(cfg: WidgetConfig): String {
@@ -312,13 +272,15 @@ private fun fontName(cfg: WidgetConfig): String {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+/**
+ * Customise the Hiatus widget: live preview pinned on top, then Text / Font / Colours / Layout / On tap.
+ * [onDone] = opened by the launcher while adding a widget.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, onOpenSettings: (() -> Unit)? = null) {
+fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
-    val haptics = LocalHapticFeedback.current
-    val black = isAppDark() && ThemePrefs.pureBlack
 
     var widgetIds by remember { mutableStateOf(Widgets.ids(ctx).toList()) }
     var selectedId by remember { mutableIntStateOf(if (launchId >= 0) launchId else widgetIds.firstOrNull() ?: -1) }
@@ -336,7 +298,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
         FontManager.loadCatalogue(ctx)
         catalogueVersion++
     }
-    val sample = remember { sampleReport(ctx) }
+    val sample = remember { sampleReport() }
     val data = report ?: sample
 
     fun commit() {
@@ -347,7 +309,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
     fun update(c: WidgetConfig) { cfg = c; commit() }
 
     var page by rememberSaveable { mutableStateOf<EditorPage?>(null) }
-    BackHandler(enabled = page != null) { page = page?.parent }
+    BackHandler(enabled = page != null) { page = null }
     var showAppPicker by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     val pinSupported = remember { AppWidgetManager.getInstance(ctx).isRequestPinAppWidgetSupported }
@@ -357,7 +319,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
         targetState = page,
         transitionSpec = {
             // Material shared-axis X: forward slides in from the right, back from the left.
-            val dir = if (depth(targetState) > depth(initialState)) 1 else -1
+            val dir = if (targetState != null) 1 else -1
             (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> dir * w / 6 } + fadeIn(tween(220, delayMillis = 60)))
                 .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> -dir * w / 6 } + fadeOut(tween(120)))
         },
@@ -369,17 +331,14 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 LargeTopAppBar(
-                    title = { Text(shown?.title ?: if (onDone != null) "New widget" else "Widgets") },
+                    title = { Text(shown?.title ?: if (onDone != null) "Hiatus" else "Widget") },
                     navigationIcon = {
-                        if (shown != null) IconButton(onClick = { page = shown.parent }) {
+                        if (shown != null) IconButton(onClick = { page = null }) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                         }
                     },
                     actions = {
                         if (onDone != null) Button(onClick = onDone, modifier = Modifier.padding(end = 12.dp)) { Text("Done") }
-                        else if (shown == null && onOpenSettings != null) IconButton(onClick = onOpenSettings) {
-                            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
-                        }
                     },
                     scrollBehavior = scroll,
                     // The preview stays pinned, so nothing scrolls under the bar.
@@ -399,63 +358,38 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
                 ) {
                     when (shown) {
                         null -> {
-                            if (onDone == null && widgetIds.isNotEmpty() && (widgetIds.size > 1 || pinSupported)) {
+                            if (onDone == null && widgetIds.size > 1) {
                                 ChipFlow {
                                     widgetIds.forEachIndexed { i, id ->
-                                        Chip(selected = id == selectedId, onClick = { selectedId = id }, label = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text("Widget ${i + 1}")
-                                                Spacer(Modifier.width(6.dp))
-                                                val s = remember(id) { Widgets.size(ctx, id) }
-                                                Text("${s.wDp}×${s.hDp}", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
-                                            }
-                                        })
+                                        Chip(selected = id == selectedId, onClick = { selectedId = id }, label = { Text("Widget ${i + 1}") })
                                     }
-                                    if (pinSupported) AssistChip(
-                                        onClick = { pin() },
-                                        label = { Text("Add") },
-                                        leadingIcon = { Icon(Icons.Rounded.Add, null, Modifier.size(AssistChipDefaults.IconSize)) },
-                                    )
                                 }
                             }
                             if (onDone == null && widgetIds.isEmpty()) Group {
                                 item {
                                     ListItem(
                                         leadingContent = { RowIcon(Icons.Rounded.Widgets) },
-                                        headlineContent = { Text("No widget yet") },
-                                        supportingContent = { Text(if (pinSupported) "Pick a look, then add it" else "Add one from your home screen's widget list") },
+                                        headlineContent = { Text("Not on your home screen yet") },
+                                        supportingContent = { Text(if (pinSupported) "Set it up here, then add it" else "Add Hiatus from your home screen's widget list") },
                                         trailingContent = if (pinSupported) { { FilledTonalButton(onClick = { pin() }) { Text("Add") } } } else null,
                                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                     )
                                 }
                             }
-                            @Composable
-                            fun looks(list: List<Preset>) = list.chunked(2).forEach { pair ->
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    pair.forEach { pr ->
-                                        val sel = matches(cfg, pr)
-                                        LookCard(pr.name, applyPreset(cfg, pr), data, sel, fontVersion, Modifier.weight(1f)) {
-                                            if (!sel) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            update(applyPreset(cfg, pr))
-                                        }
-                                    }
-                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
-                                }
-                            }
-                            SectionTitle("Looks")
-                            looks(Presets.away)
-                            var moreLooks by rememberSaveable { mutableStateOf(Presets.more.any { matches(cfg, it) }) }
-                            ShowMore("More looks", "Last away, screen time, tiles, chart, apps", moreLooks) { moreLooks = !moreLooks }
-                            AnimatedVisibility(moreLooks) {
-                                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) { looks(Presets.more) }
-                            }
                             Group {
                                 item {
-                                    val custom = Presets.all.none { matches(cfg, it) }
-                                    NavRow(
-                                        Icons.Rounded.Tune, "Customise",
-                                        (if (custom) "Custom · " else "") + cfg.style.label + " · " + fontName(cfg).substringBefore(" ·"),
-                                    ) { page = EditorPage.CUSTOMISE }
+                                    val v = listOfNotNull(if (cfg.showLabel) cfg.label() else null, if (cfg.showCaption) "share of day" else null)
+                                        .joinToString(" · ").ifEmpty { "Number only" }
+                                    NavRow(Icons.Rounded.ShortText, "Text", v) { page = EditorPage.TEXT }
+                                }
+                                item { NavRow(Icons.Rounded.TextFields, "Font", fontName(cfg)) { page = EditorPage.FONT } }
+                                item {
+                                    val v = if (cfg.useWallpaperColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                                        "Wallpaper · ${cfg.role.label} · ${cfg.theme.label}" else "Custom"
+                                    NavRow(Icons.Rounded.Palette, "Colours", v) { page = EditorPage.COLOURS }
+                                }
+                                item {
+                                    NavRow(Icons.Rounded.AspectRatio, "Layout", "${cfg.sizePercent}% · ${cfg.align.label}") { page = EditorPage.LAYOUT }
                                 }
                                 item {
                                     val v = when (cfg.tapAction) {
@@ -465,29 +399,6 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
                                     }
                                     NavRow(Icons.Rounded.TouchApp, "On tap", v) { page = EditorPage.TAP }
                                 }
-                            }
-                        }
-
-                        EditorPage.CUSTOMISE -> {
-                            Group {
-                                item { NavRow(Icons.Rounded.Dashboard, "Style", cfg.style.label) { page = EditorPage.STYLE } }
-                                item {
-                                    val v = when (cfg.style) {
-                                        WidgetStyle.TILES -> cfg.stats.joinToString(", ") { it.label }
-                                        WidgetStyle.CHART -> "Screen time by hour"
-                                        WidgetStyle.APPS -> "${cfg.appsCount} apps"
-                                        WidgetStyle.RING -> "Goal " + Fmt.dur(cfg.goalMinutes * 60_000L)
-                                        else -> cfg.metric.label
-                                    }
-                                    NavRow(Icons.Rounded.Insights, "Content", v) { page = EditorPage.CONTENT }
-                                }
-                                item { NavRow(Icons.Rounded.TextFields, "Font", fontName(cfg)) { page = EditorPage.FONT } }
-                                item {
-                                    val v = if (cfg.useWallpaperColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                                        "Wallpaper · ${cfg.role.label}" else "Custom"
-                                    NavRow(Icons.Rounded.Palette, "Colours", v) { page = EditorPage.COLOURS }
-                                }
-                                item { NavRow(Icons.Rounded.AspectRatio, "Layout", "${cfg.sizePercent}% · ${cfg.align.label}") { page = EditorPage.LAYOUT } }
                             }
                             Group {
                                 item {
@@ -501,76 +412,9 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
                             }
                         }
 
-                        EditorPage.STYLE -> {
-                            WidgetStyle.entries.chunked(2).forEach { pair ->
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    pair.forEach { st ->
-                                        LookCard(st.label, cfg.copy(style = st), data, st == cfg.style, fontVersion, Modifier.weight(1f)) {
-                                            if (st != cfg.style) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            update(cfg.copy(style = st))
-                                        }
-                                    }
-                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
-                                }
-                            }
-                        }
-
-                        EditorPage.CONTENT -> {
-                            val usesMetric = cfg.style !in setOf(WidgetStyle.TILES, WidgetStyle.CHART, WidgetStyle.APPS)
-                            if (usesMetric) Group("Shows") {
-                                item {
-                                    Pad {
-                                        var moreStats by rememberSaveable { mutableStateOf(!cfg.metric.away) }
-                                        ChipFlow {
-                                            Metric.entries.filter { it.away }.forEach { m ->
-                                                Chip(selected = cfg.metric == m, onClick = { update(cfg.copy(metric = m)) }, label = { Text(m.label) })
-                                            }
-                                        }
-                                        TextButton(onClick = { moreStats = !moreStats }, contentPadding = PaddingValues(horizontal = 4.dp)) {
-                                            Text(if (moreStats) "Fewer stats" else "More stats")
-                                            Icon(
-                                                if (moreStats) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null,
-                                                Modifier.padding(start = 4.dp).size(18.dp),
-                                            )
-                                        }
-                                        AnimatedVisibility(moreStats) {
-                                            ChipFlow {
-                                                Metric.entries.filter { !it.away }.forEach { m ->
-                                                    Chip(selected = cfg.metric == m, onClick = { update(cfg.copy(metric = m)) }, label = { Text(m.label) })
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if (cfg.style == WidgetStyle.TILES || cfg.style == WidgetStyle.DASHBOARD) Group("Tiles") {
-                                item {
-                                    Pad {
-                                        Text(
-                                            if (cfg.style == WidgetStyle.DASHBOARD) "Shown beside the number when there's room" else "In the order you pick them",
-                                            style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant,
-                                        )
-                                        Spacer(Modifier.height(12.dp))
-                                        ChipFlow {
-                                            Metric.entries.forEach { m ->
-                                                val i = cfg.stats.indexOf(m)
-                                                Chip(
-                                                    selected = i >= 0,
-                                                    onClick = {
-                                                        val s = if (i >= 0) cfg.stats - m else cfg.stats + m
-                                                        if (s.isNotEmpty()) update(cfg.copy(stats = s))
-                                                    },
-                                                    label = { Text(if (i >= 0) "${i + 1}  ${m.label}" else m.label) },
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Group("Text") {
-                                item {
-                                    SwitchRow("Label", cfg.showLabel, summary = cfg.label()) { update(cfg.copy(showLabel = it)) }
-                                }
+                        EditorPage.TEXT -> {
+                            Group("Label") {
+                                item { SwitchRow("Show label", cfg.showLabel, summary = cfg.label()) { update(cfg.copy(showLabel = it)) } }
                                 if (cfg.showLabel) item {
                                     Pad {
                                         OutlinedTextField(
@@ -579,20 +423,19 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
                                             singleLine = true,
                                             shape = RoundedCornerShape(16.dp),
                                             label = { Text("Custom label") },
-                                            placeholder = { Text(cfg.metric.label) },
+                                            placeholder = { Text("Away today") },
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }
                                 }
-                                if (cfg.showLabel) item {
-                                    SwitchRow("All caps", cfg.uppercaseLabel) { update(cfg.copy(uppercaseLabel = it)) }
-                                }
+                                if (cfg.showLabel) item { SwitchRow("All caps", cfg.uppercaseLabel) { update(cfg.copy(uppercaseLabel = it)) } }
+                            }
+                            Group("Caption") {
                                 item {
-                                    val ex = remember(cfg.metric, cfg.format, data) { Metrics.caption(ctx, cfg.metric, data, cfg.format) }
-                                    SwitchRow("Caption", cfg.showCaption, summary = ex) { update(cfg.copy(showCaption = it)) }
+                                    SwitchRow("Share of your day", cfg.showCaption, summary = Fmt.share(data)) { update(cfg.copy(showCaption = it)) }
                                 }
                             }
-                            Group("Durations") {
+                            Group("Number") {
                                 item {
                                     Pad {
                                         ChipFlow {
@@ -602,49 +445,12 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
                                         }
                                     }
                                 }
-                                item {
-                                    SwitchRow("Small units", cfg.smallUnits, summary = "Shrinks the h and m") { update(cfg.copy(smallUnits = it)) }
-                                }
-                            }
-                            when (cfg.style) {
-                                WidgetStyle.RING -> Group("Ring") {
-                                    item {
-                                        Pad {
-                                            LabeledSlider(
-                                                "Daily screen time goal", cfg.goalMinutes, 30..600, 37, Fmt.dur(cfg.goalMinutes * 60_000L),
-                                                onChange = { setLocal(cfg.copy(goalMinutes = (it / 15) * 15)) }, onDone = { commit() },
-                                            )
-                                        }
-                                    }
-                                    item { SwitchRow("Wavy", cfg.wavy) { update(cfg.copy(wavy = it)) } }
-                                }
-                                WidgetStyle.AWAY -> Group("Decoration") {
-                                    item {
-                                        SwitchRow("Corner shape", cfg.decoration, summary = "A soft shape tucked into the corner") {
-                                            update(cfg.copy(decoration = it))
-                                        }
-                                    }
-                                    if (cfg.decoration) item { Pad { ShapePicker(cfg.shape) { update(cfg.copy(shape = it)) } } }
-                                }
-                                WidgetStyle.SHAPE -> Group("Shape") {
-                                    item { Pad { ShapePicker(cfg.shape) { update(cfg.copy(shape = it)) } } }
-                                }
-                                WidgetStyle.APPS -> Group("Apps") {
-                                    item {
-                                        Pad {
-                                            LabeledSlider(
-                                                "Apps shown", cfg.appsCount, 1..8, 6, "${cfg.appsCount}",
-                                                onChange = { setLocal(cfg.copy(appsCount = it)) }, onDone = { commit() },
-                                            )
-                                        }
-                                    }
-                                }
-                                else -> {}
+                                item { SwitchRow("Small units", cfg.smallUnits, summary = "Shrinks the h and m") { update(cfg.copy(smallUnits = it)) } }
                             }
                         }
 
                         EditorPage.FONT -> {
-                            Group("Numbers") {
+                            Group("Number") {
                                 item {
                                     Pad {
                                         FontEditor(
@@ -674,7 +480,6 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
                                 item {
                                     SwitchRow(
                                         "Wallpaper colours", cfg.useWallpaperColors && canWall, enabled = canWall,
-                                        icon = Icons.Rounded.Wallpaper,
                                         summary = if (canWall) "Material You, follows your wallpaper" else "Needs Android 12",
                                     ) { update(cfg.copy(useWallpaperColors = it)) }
                                 }
@@ -702,6 +507,11 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, o
                                     }
                                 }
                                 if (cfg.background) item {
+                                    SwitchRow("Match other widgets", cfg.systemCorners, summary = "Same corner roundness as your phone's widgets") {
+                                        update(cfg.copy(systemCorners = it))
+                                    }
+                                }
+                                if (cfg.background && !cfg.systemCorners) item {
                                     Pad {
                                         LabeledSlider(
                                             "Corners", cfg.cornerRadius, 0..48, 11, "${cfg.cornerRadius} dp",
@@ -788,7 +598,7 @@ private fun PreviewCard(cfg: WidgetConfig, id: Int, data: Report, fontVersion: I
     val g1 by animateColorAsState(if (light) Color(0xFFE9E4DA) else scheme.primaryContainer, tween(450), label = "g1")
     val g2 by animateColorAsState(if (light) Color(0xFFC9D6E3) else Color(0xFF1A1C22), tween(450), label = "g2")
     val g3 by animateColorAsState(if (light) Color(0xFFF3E1D3) else scheme.tertiaryContainer, tween(450), label = "g3")
-    val size = remember(id, cfg.style) { Widgets.size(ctx, id, cfg.style) }
+    val size = remember(id) { Widgets.size(ctx, id) }
     val bmp = remember(cfg, size, data, fontVersion) {
         WidgetRenderer.render(ctx, cfg, size.w, size.h, size.dp, data).asImageBitmap()
     }
@@ -836,65 +646,6 @@ private fun SectionTitle(text: String) {
         text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 4.dp, top = 4.dp),
     )
-}
-
-/** A look (preset or style): live thumbnail at its usual size, name below. */
-@Composable
-private fun LookCard(
-    name: String, look: WidgetConfig, data: Report, selected: Boolean, fontVersion: Int,
-    modifier: Modifier, onClick: () -> Unit,
-) {
-    val ctx = LocalContext.current
-    val scheme = MaterialTheme.colorScheme
-    val thumb = remember(look, data, fontVersion) {
-        val s = Widgets.size(ctx, -1, look.style)
-        WidgetRenderer.render(ctx, look, s.w, s.h, s.dp, data).asImageBitmap()
-    }
-    val outline by animateColorAsState(if (selected) scheme.primary else Color.Transparent, tween(250), label = "cardOutline")
-    val corner by animateDpAsState(if (selected) 32.dp else 20.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "cardCorner")
-    Column(
-        modifier.clip(RoundedCornerShape(corner))
-            .background(scheme.surfaceContainer)
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(corner - 8.dp))
-                .background(Brush.linearGradient(listOf(scheme.primaryContainer, Color(0xFF1A1C22))))
-                .border(BorderStroke(3.dp, outline), RoundedCornerShape(corner - 8.dp)),
-        ) {
-            Image(thumb, name, Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
-        }
-        Row(Modifier.padding(top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedVisibility(selected) {
-                Icon(Icons.Rounded.Check, null, tint = scheme.primary, modifier = Modifier.padding(end = 4.dp).size(18.dp))
-            }
-            Text(
-                name, style = MaterialTheme.typography.labelLarge,
-                color = if (selected) scheme.primary else scheme.onSurfaceVariant, maxLines = 1,
-            )
-        }
-    }
-}
-
-/** Material shapes to put the number in. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ShapePicker(selected: ShapeKind, onPick: (ShapeKind) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    ChipFlow {
-        ShapeKind.entries.forEach { k ->
-            val sel = k == selected
-            val bg by animateColorAsState(if (sel) scheme.secondaryContainer else Color.Transparent, label = "shapeBg")
-            Box(
-                Modifier.size(60.dp).clip(RoundedCornerShape(18.dp)).background(bg).clickable { onPick(k) }.padding(10.dp),
-            ) {
-                val shape = WidgetRenderer.polygon(k).toShape()
-                Box(Modifier.fillMaxSize().clip(shape).background(if (sel) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.35f)))
-            }
-        }
-    }
 }
 
 /** Wallpaper palettes as two-tone swatches: container colour with the number colour inside. */

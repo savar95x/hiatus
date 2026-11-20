@@ -46,50 +46,24 @@ class Screenshots {
 
     // ------------------------------------------------------------------ fake data
 
-    private val fakeApps = listOf(
-        Triple("com.fake.youtube", "YouTube", 0xFFE53935.toInt()),
-        Triple("com.fake.instagram", "Instagram", 0xFFD81B60.toInt()),
-        Triple("com.fake.chrome", "Chrome", 0xFF43A047.toInt()),
-        Triple("com.fake.whatsapp", "WhatsApp", 0xFF00897B.toInt()),
-        Triple("com.fake.spotify", "Spotify", 0xFF1DB954.toInt()),
-        Triple("com.fake.maps", "Maps", 0xFF1E88E5.toInt()),
-        Triple("com.fake.gmail", "Gmail", 0xFFF4511E.toInt()),
-    )
-
-    private fun installFakeApps() {
-        val spm = shadowOf(ctx.packageManager)
-        for ((pkg, label, color) in fakeApps) {
-            val ai = ApplicationInfo().apply { packageName = pkg; nonLocalizedLabel = label; name = label }
-            spm.installPackage(PackageInfo().apply { packageName = pkg; applicationInfo = ai })
-            spm.setApplicationIcon(pkg, ShapeDrawable(OvalShape()).apply {
-                paint.color = color; intrinsicWidth = 96; intrinsicHeight = 96
-            })
-        }
-    }
-
-    private fun fakeReport(): Report {
-        installFakeApps()
+    private fun fakeReport(sleepExcluded: Boolean = false): Report {
         val cal = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 21); set(Calendar.MINUTE, 40) }
         val now = cal.timeInMillis
         val h = 3_600_000L
         val m = 60_000L
-        val pattern = longArrayOf(0, 0, 0, 0, 0, 0, 0, 8, 22, 14, 9, 18, 31, 26, 12, 10, 15, 21, 28, 35, 40, 33, 0, 0)
-        val mins = longArrayOf(78, 52, 37, 24, 18, 12, 6)
-        fun day(offset: Int, scale: Float): DayStats {
+        fun day(offset: Int, share: Float): DayStats {
             val start = Usage.dayStart(now, offset)
             val end = if (offset == 0) now else Usage.dayStart(now, offset + 1)
-            val apps = fakeApps.mapIndexed { i, (pkg) -> AppUsage(pkg, (mins[i] * scale * m).toLong()) }
-            val st = apps.sumOf { it.ms }
+            val counted = end - start
             return DayStats(
-                start = start, end = end, screenTimeMs = st, inUseMs = st + 9 * m, awayMs = (end - start) - st - 9 * m,
-                longestAwayMs = 7 * h + 12 * m, sessions = (46 * scale).toInt(), unlocks = (58 * scale).toInt(),
-                pickups = (74 * scale).toInt(), hourly = LongArray(24) { (pattern[it] * scale * m).toLong() }, apps = apps,
-                use = fakeUse(start, end, LongArray(24) { (pattern[it] * scale).toLong() }),
+                start = start, end = end, countedMs = counted, awayMs = (counted * share).toLong(),
+                breaks = listOf(Iv(start + 30 * m, start + 7 * h + 42 * m), Iv(end - 2 * h - 20 * m, end - 10 * m), Iv(start + 13 * h, start + 13 * h + 47 * m)),
+                unlocks = (58 / share * 0.8f).toInt(), firstUnlock = start + 7 * h + 42 * m,
             )
         }
-        val scales = listOf(1.2f, 0.8f, 1.5f, 0.6f, 1.1f, 1.35f, 1f)
-        val days = (-6..0).map { day(it, scales[it + 6]) }
-        return Report(now, Away(2 * h + 13 * m, now - 2 * h - 23 * m, now - 10 * m, false), days)
+        val shares = listOf(0.74f, 0.81f, 0.69f, 0.84f, 0.77f, 0.72f, 0.79f)
+        val days = (-6..0).map { day(it, shares[it + 6]) }
+        return Report(now, Away(2 * h + 10 * m, now - 2 * h - 20 * m, now - 10 * m, false), days, sleepExcluded)
     }
 
     // ------------------------------------------------------------------ widgets
@@ -122,7 +96,7 @@ class Screenshots {
             y += labelH
             var x = gap
             sizes.forEachIndexed { si, (wDp, hDp) ->
-                val cfg = cfg0.copy(theme = if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
+                val cfg = cfg0
                 val wb = WidgetRenderer.render(ctx, cfg, (wDp * d).toInt(), (hDp * d).toInt(), d, report)
                 c.drawBitmap(wb, x.toFloat(), y.toFloat(), null)
                 x += colW[si] + gap
@@ -132,14 +106,18 @@ class Screenshots {
         save(bmp, name)
     }
 
-    private val sizes = listOf(170 to 170, 340 to 170, 340 to 340)
+    private val sizes = listOf(170 to 170, 340 to 170, 170 to 90, 340 to 340)
 
-    private fun styleRows() = WidgetStyle.entries.map { it.label to WidgetConfig(style = it) }
+    private fun looks() = listOf(
+        "Default (Surface, dark)" to WidgetConfig(),
+        "Primary" to WidgetConfig(role = ColorRole.PRIMARY),
+        "Black" to WidgetConfig(role = ColorRole.BLACK),
+        "Light theme, centred, caps" to WidgetConfig(theme = ThemeMode.LIGHT, align = HAlign.CENTER, uppercaseLabel = true),
+        "2 hr 13 min, no caption" to WidgetConfig(format = DurationFormat.LONG, showCaption = false),
+    )
 
-    @Test fun widgets_light() = sheet("widgets_light", styleRows(), sizes, dark = false)
-    @Test fun widgets_dark() = sheet("widgets_dark", styleRows(), sizes, dark = true)
-    @Test fun presets_light() = sheet("presets_light", Presets.all.map { it.name to it.config }, sizes, dark = false)
-    @Test fun presets_dark() = sheet("presets_dark", Presets.all.map { it.name to it.config }, sizes, dark = true)
+    @Test fun widgets() = sheet("widgets", looks(), sizes, dark = true)
+    @Test fun widgets_wallpaper_light() = sheet("widgets_light", looks(), sizes, dark = false)
 
     // ------------------------------------------------------------------ screens
 
@@ -162,39 +140,26 @@ class Screenshots {
         save(compose.onRoot().captureToImage().asAndroidBitmap(), name)
     }
 
-    @Test fun today_light() { val r = fakeReport(); screen("today_light", false) { TodayScreen(r, true, false, {}, {}) } }
-    @Test fun today_black() { val r = fakeReport(); screen("today_black", true, black = true) { TodayScreen(r, true, false, {}, {}) } }
+    @Test fun analytics_light() { val r = fakeReport(); screen("analytics_light", false) { AnalyticsScreen(r, true, false, {}) } }
+    @Test fun analytics_dark() { val r = fakeReport(); screen("analytics_dark", true) { AnalyticsScreen(r, true, false, {}) } }
+    @Test fun analytics_black() { val r = fakeReport(true); screen("analytics_black", true, black = true) { AnalyticsScreen(r, true, false, {}) } }
 
-    @Config(qualifiers = "w411dp-h2600dp-xxhdpi")
-    @Test fun today_full() { val r = fakeReport(); screen("today_full", true) { TodayScreen(r, true, false, {}, {}) } }
+    @Config(qualifiers = "w411dp-h2000dp-xxhdpi")
+    @Test fun analytics_full() { val r = fakeReport(); screen("analytics_full", true) { AnalyticsScreen(r, true, false, {}) } }
 
-    @Test fun today_noaccess() = screen("today_noaccess", false) { TodayScreen(null, false, false, {}, {}) }
-    @Test fun today_loading() = screen("today_loading", true) { TodayScreen(null, true, false, {}, {}) }
-
-    @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
-    @Test fun editor_light() { val r = fakeReport(); screen("editor_light", false) { WidgetEditor(-1, r) } }
+    @Test fun analytics_noaccess() = screen("analytics_noaccess", false) { AnalyticsScreen(null, false, false, {}) }
 
     @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
-    @Test fun editor_dark() { val r = fakeReport(); screen("editor_dark", true) { WidgetEditor(-1, r) } }
+    @Test fun editor_dark() { val r = fakeReport(); screen("editor_dark", true, frozen = false) { WidgetEditor(-1, r) } }
 
     @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
-    @Test fun settings_dark() = screen("settings_dark", true) { AppSettingsScreen(true, {}, {}) }
-
-    @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
-    @Test fun editor_customise() {
+    @Test fun editor_text() {
         val r = fakeReport()
-        screen("editor_customise", true, frozen = false, after = { compose.onNodeWithText("Customise").performClick() }) { WidgetEditor(-1, r) }
+        screen("editor_text", false, frozen = false, after = { compose.onNodeWithText("Text").performClick() }) { WidgetEditor(-1, r) }
     }
 
-    @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
-    @Test fun editor_content() {
-        val r = fakeReport()
-        screen("editor_content", false, frozen = false, after = {
-            compose.onNodeWithText("Customise").performClick()
-            compose.mainClock.advanceTimeBy(1_000)
-            compose.onAllNodesWithText("Content").onFirst().performClick()
-        }) { WidgetEditor(-1, r) }
-    }
+    @Test fun editor_new() { val r = fakeReport(); screen("editor_new", true, frozen = false) { WidgetEditor(7, r, onDone = {}) } }
 
-    @Test fun editor_new() { val r = fakeReport(); screen("editor_new", true, black = true) { WidgetEditor(7, r, onDone = {}) } }
+    @Config(qualifiers = "w411dp-h1600dp-xxhdpi")
+    @Test fun settings_dark() = screen("settings_dark", true, frozen = false) { AppSettingsScreen(true, {}) }
 }

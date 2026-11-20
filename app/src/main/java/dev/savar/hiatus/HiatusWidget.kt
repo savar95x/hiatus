@@ -143,8 +143,8 @@ object Widgets {
     fun ids(ctx: Context): IntArray =
         AppWidgetManager.getInstance(ctx).getAppWidgetIds(component(ctx)) ?: IntArray(0)
 
-    /** A widget's size on the home screen; for [id] < 0 (no widget yet) a typical size for [style]. */
-    fun size(ctx: Context, id: Int, style: WidgetStyle = WidgetStyle.HERO): SizePx {
+    /** A widget's size on the home screen; for [id] < 0 (no widget yet) the usual 2×2. */
+    fun size(ctx: Context, id: Int): SizePx {
         val portrait = ctx.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
         var wDp = 0
         var hDp = 0
@@ -153,16 +153,7 @@ object Widgets {
             wDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
             hDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
         }
-        if (wDp <= 0 || hDp <= 0) {
-            val (dw, dh) = when (style) {
-                WidgetStyle.HERO, WidgetStyle.RING, WidgetStyle.SHAPE -> 170 to 170
-                WidgetStyle.AWAY -> 340 to 170
-                WidgetStyle.TILES, WidgetStyle.CHART -> 340 to 170
-                WidgetStyle.APPS -> 340 to 250
-                WidgetStyle.DASHBOARD -> 340 to 340
-            }
-            wDp = dw; hDp = dh
-        }
+        if (wDp <= 0 || hDp <= 0) { wDp = 170; hDp = 170 }
         val density = ctx.resources.displayMetrics.density
         var w = wDp * density
         var h = hDp * density
@@ -236,11 +227,11 @@ object Widgets {
 
     private fun draw(ctx: Context, m: AppWidgetManager, id: Int, report: Report?) {
         val cfg = ConfigStore.load(ctx, id)
-        val sz = size(ctx, id, cfg.style)
+        val sz = size(ctx, id)
         val bmp = WidgetRenderer.render(ctx, cfg, sz.w, sz.h, sz.dp, report)
         val rv = RemoteViews(ctx.packageName, R.layout.widget_root)
         rv.setImageViewBitmap(R.id.img, bmp)
-        rv.setContentDescription(R.id.img, WidgetRenderer.description(cfg, report))
+        rv.setContentDescription(R.id.img, WidgetRenderer.description(report))
         tapIntent(ctx, cfg, id, report == null)?.let { rv.setOnClickPendingIntent(android.R.id.background, it) }
         m.updateAppWidget(id, rv)
     }

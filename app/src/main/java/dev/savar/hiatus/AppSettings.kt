@@ -1,5 +1,7 @@
 package dev.savar.hiatus
 
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.TimePicker
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
@@ -249,7 +251,7 @@ const val SOURCE_URL = "https://github.com/savar95x/hiatus"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: () -> Unit) {
+fun AppSettingsScreen(granted: Boolean, onTrackingChanged: () -> Unit) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val dark = isAppDark()
@@ -263,14 +265,16 @@ fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: (
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
     }
+    var excludeSleep by remember { mutableStateOf(AppPrefs.excludeSleep(ctx)) }
+    var bedtime by remember { mutableIntStateOf(AppPrefs.bedtime(ctx)) }
+    var wake by remember { mutableIntStateOf(AppPrefs.wakeTime(ctx)) }
+    var picking by remember { mutableStateOf<String?>(null) } // "bed" | "wake"
     Scaffold(
         modifier = Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             LargeTopAppBar(
                 title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
-                },
                 scrollBehavior = scroll,
                 colors = if (dark && ThemePrefs.pureBlack) TopAppBarDefaults.topAppBarColors(scrolledContainerColor = scheme.surface)
                 else TopAppBarDefaults.topAppBarColors(),
@@ -295,7 +299,37 @@ fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: (
                     ) { ThemePrefs.setPureBlack(ctx, it) }
                 }
             }
-            Group("Tracking") {
+            Group("Sleep") {
+                item {
+                    SwitchRow(
+                        "Leave out sleep", excludeSleep,
+                        summary = "Sleep hours don't count as time away",
+                    ) {
+                        excludeSleep = it
+                        AppPrefs.setExcludeSleep(ctx, it)
+                        onTrackingChanged()
+                    }
+                }
+                if (excludeSleep) item {
+                    ListItem(
+                        modifier = Modifier.clickable { picking = "bed" },
+                        leadingContent = { RowIcon(Icons.Rounded.Bedtime) },
+                        headlineContent = { Text("Bedtime") },
+                        trailingContent = { Text(Fmt.clock(ctx, bedtime), style = MaterialTheme.typography.titleMedium) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                }
+                if (excludeSleep) item {
+                    ListItem(
+                        modifier = Modifier.clickable { picking = "wake" },
+                        leadingContent = { RowIcon(Icons.Rounded.WbSunny) },
+                        headlineContent = { Text("Wake up") },
+                        trailingContent = { Text(Fmt.clock(ctx, wake), style = MaterialTheme.typography.titleMedium) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                }
+            }
+            Group("Breaks") {
                 item {
                     Pad {
                         Text("Shortest break", style = MaterialTheme.typography.labelLarge)
@@ -311,6 +345,8 @@ fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: (
                         }
                     }
                 }
+            }
+            Group("Access") {
                 item {
                     ListItem(
                         modifier = Modifier.clickable { openUsageAccess(ctx) },
@@ -371,4 +407,23 @@ fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: (
             }
         }
     }
+    picking?.let { which ->
+        val initial = if (which == "bed") bedtime else wake
+        val state = rememberTimePickerState(initial / 60, initial % 60, android.text.format.DateFormat.is24HourFormat(ctx))
+        AlertDialog(
+            onDismissRequest = { picking = null },
+            title = { Text(if (which == "bed") "Bedtime" else "Wake up") },
+            text = { TimePicker(state = state) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val m = state.hour * 60 + state.minute
+                    if (which == "bed") { bedtime = m; AppPrefs.setBedtime(ctx, m) } else { wake = m; AppPrefs.setWakeTime(ctx, m) }
+                    picking = null
+                    onTrackingChanged()
+                }) { Text("Set") }
+            },
+            dismissButton = { TextButton(onClick = { picking = null }) { Text("Cancel") } },
+        )
+    }
+
 }

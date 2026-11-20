@@ -89,6 +89,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -265,7 +266,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab(val label: String) { TODAY("Today"), WIDGETS("Widgets") }
+private enum class Tab(val label: String, val icon: ImageVector, val selected: ImageVector) {
+    ANALYTICS("Hiatus", Icons.Outlined.Insights, Icons.Rounded.Insights),
+    WIDGET("Widget", Icons.Outlined.Widgets, Icons.Rounded.Widgets),
+    SETTINGS("Settings", Icons.Outlined.Settings, Icons.Rounded.Settings),
+}
 
 @Composable
 private fun Root(launchId: Int) {
@@ -293,9 +298,7 @@ private fun Root(launchId: Int) {
     // Leaving the app: make sure every widget shows the latest settings before Android freezes the process.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { Widgets.refresh(ctx, fresh = false) }
 
-    var tab by rememberSaveable { mutableStateOf(if (launchId >= 0) Tab.WIDGETS else Tab.TODAY) }
-    var settings by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = settings) { settings = false }
+    var tab by rememberSaveable { mutableStateOf(Tab.ANALYTICS) }
 
     if (launchId >= 0) {
         // Opened by the launcher while adding a widget: just the editor, with Done.
@@ -304,49 +307,28 @@ private fun Root(launchId: Int) {
         return
     }
 
-    AnimatedContent(
-        targetState = settings,
-        transitionSpec = {
-            val dir = if (targetState) 1 else -1
-            (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> dir * w / 6 } + fadeIn(tween(220, delayMillis = 60)))
-                .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> -dir * w / 6 } + fadeOut(tween(120)))
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            NavigationBar {
+                Tab.entries.forEach { t ->
+                    val selected = tab == t
+                    NavigationBarItem(
+                        selected = selected,
+                        onClick = { tab = t },
+                        icon = { Icon(if (selected) t.selected else t.icon, contentDescription = null) },
+                        label = { Text(t.label) },
+                    )
+                }
+            }
         },
-        label = "settings",
-    ) { inSettings ->
-        if (inSettings) {
-            AppSettingsScreen(granted, onBack = { settings = false }, onTrackingChanged = { if (granted) load(false) })
-        } else {
-            Scaffold(
-                contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                bottomBar = {
-                    NavigationBar {
-                        Tab.entries.forEach { t ->
-                            val selected = tab == t
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = { tab = t },
-                                icon = {
-                                    Icon(
-                                        when (t) {
-                                            Tab.TODAY -> if (selected) Icons.Rounded.Insights else Icons.Outlined.Insights
-                                            Tab.WIDGETS -> if (selected) Icons.Rounded.Widgets else Icons.Outlined.Widgets
-                                        },
-                                        contentDescription = null,
-                                    )
-                                },
-                                label = { Text(t.label) },
-                            )
-                        }
-                    }
-                },
-            ) { pad ->
-                Box(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
-                    Crossfade(targetState = tab, animationSpec = tween(220), label = "tab") { shown ->
-                        when (shown) {
-                            Tab.TODAY -> TodayScreen(report, granted, refreshing, onRefresh = { load(true) }, onOpenSettings = { settings = true })
-                            Tab.WIDGETS -> WidgetEditor(launchId, report, onOpenSettings = { settings = true })
-                        }
-                    }
+    ) { pad ->
+        Box(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
+            Crossfade(targetState = tab, animationSpec = tween(220), label = "tab") { shown ->
+                when (shown) {
+                    Tab.ANALYTICS -> AnalyticsScreen(report, granted, refreshing, onRefresh = { load(true) })
+                    Tab.WIDGET -> WidgetEditor(launchId, report)
+                    Tab.SETTINGS -> AppSettingsScreen(granted, onTrackingChanged = { if (granted) load(false) })
                 }
             }
         }

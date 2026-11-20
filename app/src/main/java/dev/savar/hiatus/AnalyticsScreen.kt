@@ -245,7 +245,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** "2h 13m" with the unit letters at a smaller size, like Digital Wellbeing. */
+/** "2h 13m" with the unit letters smaller, like Digital Wellbeing. */
 internal fun richDuration(text: String, unitScale: Float = 0.55f): AnnotatedString = buildAnnotatedString {
     for (ch in text) {
         if (ch.isDigit() || ch == ':' || ch == '.') append(ch)
@@ -253,33 +253,22 @@ internal fun richDuration(text: String, unitScale: Float = 0.55f): AnnotatedStri
     }
 }
 
+internal fun openUsageAccess(ctx: Context) {
+    val direct = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:" + ctx.packageName))
+    val ok = runCatching { ctx.startActivity(direct) }.isSuccess
+    if (!ok) runCatching { ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+}
+
+/** Home: everything about time away from the phone, for today or a day picked in the week chart. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun TodayScreen(
-    report: Report?,
-    granted: Boolean,
-    refreshing: Boolean,
-    onRefresh: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
+fun AnalyticsScreen(report: Report?, granted: Boolean, refreshing: Boolean, onRefresh: () -> Unit) {
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val scheme = MaterialTheme.colorScheme
-    val black = isAppDark() && ThemePrefs.pureBlack
     var sel by rememberSaveable { mutableIntStateOf(-1) } // -1 = today
     Scaffold(
         modifier = Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            LargeTopAppBar(
-                title = { Text("Hiatus") },
-                actions = {
-                    IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, contentDescription = "Settings") }
-                },
-                scrollBehavior = scroll,
-                colors = if (black) TopAppBarDefaults.topAppBarColors(scrolledContainerColor = scheme.surface)
-                else TopAppBarDefaults.topAppBarColors(),
-            )
-        },
+        topBar = { LargeTopAppBar(title = { Text("Hiatus") }, scrollBehavior = scroll) },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             when {
@@ -295,12 +284,20 @@ fun TodayScreen(
                                 .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            HeroCard(report)
+                            HeroCard(report, day, isToday)
                             WeekCard(report.days, idx) { sel = it }
-                            DonutCard(day, isToday)
-                            StatsGroup(day, isToday)
-                            HourlyCard(day, if (isToday) report.now else null)
-                            AppsGroup(day)
+                            BreaksGroup(report, day, isToday)
+                            CheckInsGroup(day)
+                            if (report.sleepExcluded) {
+                                val ctx = LocalContext.current
+                                Text(
+                                    "Sleep (" + Fmt.clock(ctx, AppPrefs.bedtime(ctx)) + " – " + Fmt.clock(ctx, AppPrefs.wakeTime(ctx)) +
+                                        ") isn't counted. Change it in Settings.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -322,12 +319,12 @@ private fun PermissionCard() {
         Box(
             Modifier.size(120.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(scheme.primaryContainer),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.HourglassBottom, null, tint = scheme.onPrimaryContainer, modifier = Modifier.size(48.dp)) }
+        ) { Icon(Icons.Rounded.SelfImprovement, null, tint = scheme.onPrimaryContainer, modifier = Modifier.size(52.dp)) }
         Spacer(Modifier.height(28.dp))
-        Text("See your time off the phone", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Text("See your time away from the phone", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Hiatus reads unlocks and app usage on this phone. Nothing leaves it.",
+            "Hiatus reads when your phone is unlocked. Nothing leaves it.",
             style = MaterialTheme.typography.bodyLarge,
             color = scheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -337,96 +334,7 @@ private fun PermissionCard() {
             Text("Allow usage access", style = MaterialTheme.typography.titleMedium)
         }
         Spacer(Modifier.height(12.dp))
-        Text(
-            "Find Hiatus in the list and switch it on",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-        )
-    }
-}
-
-internal fun openUsageAccess(ctx: Context) {
-    val direct = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:" + ctx.packageName))
-    val ok = runCatching { ctx.startActivity(direct) }.isSuccess
-    if (!ok) runCatching { ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun HeroCard(r: Report) {
-    val ctx = LocalContext.current
-    val scheme = MaterialTheme.colorScheme
-    val t = r.today
-    val a = r.away
-    val spin = rememberInfiniteTransition(label = "spin")
-    val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(24_000, easing = LinearEasing), RepeatMode.Restart), label = "angle")
-    Surface(color = scheme.primaryContainer, shape = RoundedCornerShape(32.dp), modifier = Modifier.fillMaxWidth()) {
-        Box {
-            // The same soft corner shape as the Away widget.
-            Box(
-                Modifier.align(Alignment.TopEnd).offset(x = 56.dp, y = (-56).dp).size(190.dp).rotate(angle)
-                    .clip(MaterialShapes.Cookie9Sided.toShape()).background(scheme.onPrimaryContainer.copy(alpha = 0.06f)),
-            )
-            Column(Modifier.padding(24.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(scheme.primary))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Away today", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer.copy(alpha = 0.8f))
-                }
-                AnimatedContent(Fmt.dur(t.awayMs), label = "away") { v ->
-                    Text(
-                        richDuration(v),
-                        style = MaterialTheme.typography.displayLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = scheme.onPrimaryContainer,
-                        maxLines = 1,
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                DayTimeline(t, scheme.primary, scheme.onPrimaryContainer.copy(alpha = 0.16f), Modifier.fillMaxWidth().height(14.dp))
-                Spacer(Modifier.height(6.dp))
-                Row(Modifier.fillMaxWidth()) {
-                    listOf("12 AM", "6 AM", "12 PM", "6 PM").forEach {
-                        Text(it, style = MaterialTheme.typography.labelSmall, color = scheme.onPrimaryContainer.copy(alpha = 0.6f), modifier = Modifier.weight(1f))
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "${t.awayPct}% of your day  ·  longest ${Fmt.dur(t.longestAwayMs)}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = scheme.onPrimaryContainer,
-                )
-                Text(
-                    when {
-                        a == null -> "No break yet"
-                        a.ongoing -> "Away now since " + Fmt.time(ctx, a.start)
-                        else -> "Last break " + Fmt.dur(a.ms) + ", " + Fmt.time(ctx, a.start) + " – " + Fmt.time(ctx, a.end)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onPrimaryContainer.copy(alpha = 0.75f),
-                )
-            }
-        }
-    }
-}
-
-/** The day as 24 pills, as on the Away widget: brighter the more of that hour you were away. */
-@Composable
-private fun DayTimeline(day: DayStats, away: Color, rest: Color, modifier: Modifier) {
-    val shares = remember(day) { Usage.hourlyAway(day) }
-    val grow = remember(day.start) { Animatable(0f) }
-    LaunchedEffect(day.start) { grow.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
-    Canvas(modifier) {
-        val gap = maxOf(2.dp.toPx(), size.width * 0.008f)
-        val segW = (size.width - 23 * gap) / 24
-        val rad = minOf(segW, size.height) / 2
-        for (h in 0 until 24) {
-            val sh = shares[h]
-            // Pills light up left to right as the card appears.
-            val on = (grow.value * 24 - h).coerceIn(0f, 1f)
-            val color = if (sh < 0) rest.copy(alpha = rest.alpha * 0.6f) else lerp(rest, away, (0.15f + 0.85f * sh) * on)
-            drawRoundRect(color, Offset(h * (segW + gap), 0f), Size(segW, size.height), CornerRadius(rad, rad))
-        }
+        Text("Find Hiatus in the list and switch it on", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
     }
 }
 
@@ -437,12 +345,52 @@ private fun dayName(d: DayStats, today: Boolean): String {
 }
 
 @Composable
+private fun HeroCard(r: Report, day: DayStats, isToday: Boolean) {
+    val ctx = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val share by animateFloatAsState(day.awayPct / 100f, tween(800, easing = FastOutSlowInEasing), label = "share")
+    Surface(color = scheme.primaryContainer, shape = RoundedCornerShape(32.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(24.dp)) {
+            Text(
+                if (isToday) "Away today" else "Away · " + dayName(day, false),
+                style = MaterialTheme.typography.titleMedium,
+                color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+            AnimatedContent(Fmt.dur(day.awayMs), label = "away") { v ->
+                Text(
+                    richDuration(v),
+                    style = MaterialTheme.typography.displayLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = scheme.onPrimaryContainer,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)).background(scheme.onPrimaryContainer.copy(alpha = 0.14f))) {
+                Box(Modifier.fillMaxWidth(share.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(50)).background(scheme.primary))
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(Fmt.share(r, day), style = MaterialTheme.typography.bodyLarge, color = scheme.onPrimaryContainer)
+            val a = r.away
+            if (isToday && a != null) {
+                Text(
+                    if (a.ongoing) "Away now, since " + Fmt.time(ctx, a.start)
+                    else "Last break " + Fmt.dur(a.ms) + ", ended " + Fmt.time(ctx, a.end),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onPrimaryContainer.copy(alpha = 0.75f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun WeekCard(days: List<DayStats>, sel: Int, onSelect: (Int) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
-    val max = days.maxOf { it.screenTimeMs }.coerceAtLeast(3_600_000L)
-    val tracked = days.filter { it.screenTimeMs > 0 }
-    val avg = if (tracked.isEmpty()) 0L else tracked.sumOf { it.screenTimeMs } / tracked.size
+    val max = days.maxOf { it.awayMs }.coerceAtLeast(3_600_000L)
+    val tracked = days.filter { it.countedMs > 0 }
+    val avg = if (tracked.isEmpty()) 0L else tracked.sumOf { it.awayMs } / tracked.size
     val dayFmt = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
     Surface(color = scheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp)) {
@@ -451,14 +399,14 @@ private fun WeekCard(days: List<DayStats>, sel: Int, onSelect: (Int) -> Unit) {
                     Text("This week", style = MaterialTheme.typography.titleMedium)
                     Text("Daily average " + Fmt.dur(avg), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                 }
-                AnimatedContent(Fmt.dur(days[sel].screenTimeMs), label = "selTotal") { v ->
+                AnimatedContent(Fmt.dur(days[sel].awayMs), label = "selTotal") { v ->
                     Text(richDuration(v), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium, color = scheme.primary)
                 }
             }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 days.forEachIndexed { i, d ->
-                    val frac by animateFloatAsState((d.screenTimeMs.toFloat() / max).coerceIn(0.06f, 1f), label = "bar")
+                    val frac by animateFloatAsState((d.awayMs.toFloat() / max).coerceIn(0.06f, 1f), label = "bar")
                     val selected = i == sel
                     val color by animateColorAsState(if (selected) scheme.primary else scheme.secondaryContainer, label = "barColor")
                     Column(
@@ -487,74 +435,6 @@ private fun WeekCard(days: List<DayStats>, sel: Int, onSelect: (Int) -> Unit) {
     }
 }
 
-/** App share of the day's screen time, as a donut (Digital Wellbeing's dashboard). */
-@Composable
-private fun DonutCard(day: DayStats, isToday: Boolean) {
-    val scheme = MaterialTheme.colorScheme
-    val ctx = LocalContext.current
-    val colors = listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.primary.copy(alpha = 0.55f), scheme.tertiary.copy(alpha = 0.55f))
-    val other = scheme.surfaceVariant
-    val top = day.apps.take(5)
-    val total = day.screenTimeMs.coerceAtLeast(1)
-    val rest = (day.screenTimeMs - top.sumOf { it.ms }).coerceAtLeast(0)
-    val slices = top.mapIndexed { i, a -> a.ms.toFloat() / total to colors[i] } +
-        (if (rest > 0) listOf(rest.toFloat() / total to other) else emptyList())
-    val grow = remember(day.start) { Animatable(0f) }
-    LaunchedEffect(day.start) { grow.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
-    Surface(color = scheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp)) {
-            Text(dayName(day, isToday), style = MaterialTheme.typography.titleMedium)
-            Text("Screen time", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-            Spacer(Modifier.height(16.dp))
-            Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.size(212.dp)) {
-                    val stroke = 30.dp.toPx()
-                    val inset = stroke / 2
-                    val arcSize = Size(size.width - stroke, size.height - stroke)
-                    if (slices.isEmpty()) {
-                        drawArc(other, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
-                    } else {
-                        val gap = if (slices.size > 1) 2.5f else 0f
-                        var start = -90f
-                        for ((frac, color) in slices) {
-                            val sweep = 360f * frac * grow.value
-                            if (sweep - gap > 0.3f) {
-                                drawArc(color, start + gap / 2, sweep - gap, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
-                            }
-                            start += sweep
-                        }
-                    }
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        richDuration(Fmt.dur(day.screenTimeMs)),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text("${day.unlocks} unlocks", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                }
-            }
-            if (top.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                ChipFlow {
-                    top.forEachIndexed { i, a ->
-                        val label = remember(a.pkg) { Usage.label(ctx, a.pkg) }
-                        Row(
-                            Modifier.clip(RoundedCornerShape(50)).background(scheme.surfaceContainerHigh).padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(Modifier.size(10.dp).clip(CircleShape).background(colors[i]))
-                            Spacer(Modifier.width(8.dp))
-                            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 120.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StatRow(icon: ImageVector, title: String, value: String, supporting: String? = null) {
     val scheme = MaterialTheme.colorScheme
@@ -567,108 +447,35 @@ private fun StatRow(icon: ImageVector, title: String, value: String, supporting:
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun StatsGroup(d: DayStats, isToday: Boolean) {
-    Group("Details") {
-        item { StatRow(Icons.Rounded.SelfImprovement, if (isToday) "Away so far" else "Away", Fmt.dur(d.awayMs)) }
-        item { StatRow(Icons.Rounded.Spa, "Longest break", Fmt.dur(d.longestAwayMs)) }
-        item { StatRow(Icons.Rounded.LockOpen, "Unlocks", d.unlocks.toString()) }
-        item { StatRow(Icons.Rounded.Visibility, "Screen wakes", d.pickups.toString()) }
-        item { StatRow(Icons.Rounded.Timelapse, "Per session", Fmt.dur(d.avgSessionMs), "${d.sessions} sessions") }
-    }
-}
-
-@Composable
-private fun HourlyCard(d: DayStats, now: Long?) {
-    val scheme = MaterialTheme.colorScheme
-    val nowHour = now?.let { Calendar.getInstance().apply { timeInMillis = it }.get(Calendar.HOUR_OF_DAY) }
-    val peak = d.hourly.indices.maxByOrNull { d.hourly[it] }?.takeIf { d.hourly[it] > 0 }
-    Surface(color = scheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp)) {
-            Text("By hour", style = MaterialTheme.typography.titleMedium)
-            Text(
-                peak?.let { "Busiest " + hourLabel(it) + " – " + hourLabel((it + 1) % 24) } ?: "No screen time",
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            val accent = scheme.primary
-            val used = scheme.primary.copy(alpha = 0.55f)
-            val track = scheme.secondaryContainer
-            val future = scheme.secondaryContainer.copy(alpha = 0.45f)
-            Canvas(Modifier.fillMaxWidth().height(112.dp)) {
-                val gapK = 0.45f
-                val bw = size.width / (24 + 23 * gapK)
-                val gap = bw * gapK
-                for (h in 0 until 24) {
-                    val frac = (d.hourly[h] / 3_600_000f).coerceIn(0f, 1f)
-                    val bh = (size.height * frac).coerceAtLeast(bw)
-                    val color = when {
-                        nowHour != null && h == nowHour -> accent
-                        nowHour != null && h > nowHour -> future
-                        frac > 0f -> if (h == peak) accent else used
-                        else -> track
-                    }
-                    drawRoundRect(color, Offset(h * (bw + gap), size.height - bh), Size(bw, bh), CornerRadius(bw / 2, bw / 2))
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth()) {
-                listOf("12 AM", "6 AM", "12 PM", "6 PM").forEach {
-                    Text(it, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                }
-            }
-        }
-    }
-}
-
-private fun hourLabel(h: Int): String = when {
-    h == 0 -> "12 AM"
-    h < 12 -> "$h AM"
-    h == 12 -> "12 PM"
-    else -> "${h - 12} PM"
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun AppsGroup(day: DayStats) {
-    val top = day.apps.take(10)
-    if (top.isEmpty()) return
-    val max = top.first().ms.coerceAtLeast(1)
-    Group("Top apps") {
-        top.forEach { a -> item { AppRow(a, a.ms.toFloat() / max) } }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun AppRow(a: AppUsage, frac: Float) {
+private fun BreaksGroup(r: Report, d: DayStats, isToday: Boolean) {
     val ctx = LocalContext.current
-    val scheme = MaterialTheme.colorScheme
-    val icon by produceState<ImageBitmap?>(null, a.pkg) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { ctx.packageManager.getApplicationIcon(a.pkg).toBitmap(128, 128).asImageBitmap() }.getOrNull()
+    val longest = d.breaks.maxByOrNull { it.len }
+    Group("Breaks") {
+        item {
+            StatRow(
+                Icons.Rounded.Spa, "Longest", Fmt.dur(d.longestBreakMs),
+                longest?.let { Fmt.time(ctx, it.s) + " – " + Fmt.time(ctx, it.e) },
+            )
+        }
+        item { StatRow(Icons.Rounded.Timelapse, "Average", Fmt.dur(d.avgBreakMs)) }
+        item { StatRow(Icons.Rounded.SelfImprovement, "Breaks", d.breaks.size.toString(), "At least ${AppPrefs.minBreakMinutes(ctx)} min each") }
+        val a = r.away
+        if (isToday && a != null) item {
+            StatRow(
+                Icons.Rounded.History, if (a.ongoing) "Current break" else "Last break", Fmt.dur(a.ms),
+                if (a.ongoing) "Since " + Fmt.time(ctx, a.start) else Fmt.time(ctx, a.start) + " – " + Fmt.time(ctx, a.end),
+            )
         }
     }
-    val label = remember(a.pkg) { Usage.label(ctx, a.pkg) }
-    Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            icon?.let { Image(it, null, Modifier.size(40.dp)) }
-                ?: Box(Modifier.size(40.dp).clip(CircleShape).background(scheme.secondaryContainer))
-        }
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Spacer(Modifier.width(8.dp))
-                Text(Fmt.dur(a.ms), style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(8.dp))
-            val w by animateFloatAsState(frac.coerceIn(0.02f, 1f), tween(700, easing = FastOutSlowInEasing), label = "appBar")
-            Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(scheme.surfaceContainerHighest)) {
-                Box(Modifier.fillMaxWidth(w).fillMaxHeight().clip(RoundedCornerShape(50)).background(scheme.primary))
-            }
-        }
+}
+
+@Composable
+private fun CheckInsGroup(d: DayStats) {
+    val ctx = LocalContext.current
+    Group("Check-ins") {
+        item { StatRow(Icons.Rounded.LockOpen, "Unlocks", d.unlocks.toString()) }
+        item { StatRow(Icons.Rounded.Schedule, "One every", if (d.unlocks == 0) "—" else Fmt.dur(d.unlockEveryMs), "On average") }
+        item { StatRow(Icons.Rounded.WbSunny, "First unlock", d.firstUnlock?.let { Fmt.time(ctx, it) } ?: "—") }
     }
 }

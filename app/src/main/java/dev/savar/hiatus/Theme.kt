@@ -258,13 +258,13 @@ object ThemePrefs {
     fun load(ctx: Context) {
         if (loaded) return
         loaded = true
-        pureBlack = p(ctx).getBoolean("pure_black", false)
+        pureBlack = p(ctx).getBoolean("pure_black_v2", false)
         mode = ThemeMode.entries.firstOrNull { it.name == p(ctx).getString("theme", null) } ?: ThemeMode.SYSTEM
     }
 
     fun setPureBlack(ctx: Context, on: Boolean) {
         pureBlack = on
-        p(ctx).edit().putBoolean("pure_black", on).apply()
+        p(ctx).edit().putBoolean("pure_black_v2", on).apply()
     }
 
     fun setMode(ctx: Context, m: ThemeMode) {
@@ -281,22 +281,6 @@ internal fun ColorScheme.pureBlack(): ColorScheme = copy(
     background = Color.Black,
     surface = Color.Black,
     surfaceDim = Color.Black,
-    surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = lerp(Color.Black, surfaceContainerLow, 0.45f),
-    surfaceContainer = lerp(Color.Black, surfaceContainer, 0.55f),
-    surfaceContainerHigh = lerp(Color.Black, surfaceContainerHigh, 0.65f),
-    surfaceContainerHighest = lerp(Color.Black, surfaceContainerHighest, 0.75f),
-    surfaceVariant = lerp(Color.Black, surfaceVariant, 0.7f),
-)
-
-/**
- * Default dark theme, pulled close to black like OxygenOS's own dark apps (stock Material dark is a lighter
- * grey-blue). Pure black goes all the way to #000.
- */
-internal fun ColorScheme.deepDark(): ColorScheme = copy(
-    background = lerp(Color.Black, background, 0.3f),
-    surface = lerp(Color.Black, surface, 0.3f),
-    surfaceDim = lerp(Color.Black, surfaceDim, 0.3f),
     surfaceContainerLowest = Color.Black,
     surfaceContainerLow = lerp(Color.Black, surfaceContainerLow, 0.45f),
     surfaceContainer = lerp(Color.Black, surfaceContainer, 0.55f),
@@ -323,11 +307,7 @@ fun HiatusTheme(content: @Composable () -> Unit) {
         dark -> darkColorScheme()
         else -> lightColorScheme()
     }
-    val scheme = when {
-        !dark -> base
-        ThemePrefs.pureBlack -> base.pureBlack()
-        else -> base.deepDark()
-    }
+    val scheme = if (dark && ThemePrefs.pureBlack) base.pureBlack() else base
     val activity = ctx as? android.app.Activity
     val view = LocalView.current
     SideEffect {

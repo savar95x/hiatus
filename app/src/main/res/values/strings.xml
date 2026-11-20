@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">Hiatus</string>
     <string name="widget_name">Hiatus</string>
-    <string name="widget_desc">Time away, screen time, unlocks and top apps. Seven styles, fully customisable.</string>
+    <string name="widget_desc">How long you've been away from your phone today.</string>
 </resources>

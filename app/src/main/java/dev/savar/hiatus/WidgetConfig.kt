@@ -1,32 +1,7 @@
 package dev.savar.hiatus
 
 import android.content.Context
-import org.json.JSONArray
 import org.json.JSONObject
-
-enum class WidgetStyle(val label: String) {
-    AWAY("Away"),
-    HERO("Number"),
-    RING("Ring"),
-    SHAPE("Shape"),
-    TILES("Tiles"),
-    CHART("Chart"),
-    APPS("Top apps"),
-    DASHBOARD("Dashboard"),
-}
-
-/** Everything a widget can show as a number. */
-/** [away]: the app's main subject; these are offered first, the rest under "More stats". */
-enum class Metric(val label: String, val short: String, val away: Boolean = false) {
-    AWAY_TODAY("Away today", "Away", away = true),
-    LAST_AWAY("Last away", "Last away", away = true),
-    SCREEN_TIME("Screen time", "Screen"),
-    UNLOCKS("Unlocks", "Unlocks"),
-    PICKUPS("Screen wakes", "Wakes"),
-    PER_SESSION("Per session", "Session"),
-    LONGEST_AWAY("Longest away", "Longest", away = true),
-    SESSIONS("Sessions", "Sessions"),
-}
 
 enum class FontSource(val label: String) {
     SYSTEM("System"),
@@ -43,7 +18,7 @@ data class FontSpec(
     val localFontFile: String = "",
 )
 
-/** Which wallpaper (Material You) palette the widget's container takes. */
+/** Which wallpaper (Material You) palette the widget takes. */
 enum class ColorRole(val label: String) {
     SURFACE("Surface"),
     PRIMARY("Primary"),
@@ -70,32 +45,14 @@ enum class HAlign(val label: String) {
     CENTER("Centre"),
 }
 
-enum class ShapeKind(val label: String) {
-    COOKIE_9("Cookie"),
-    COOKIE_4("Cookie 4"),
-    SUNNY("Sunny"),
-    SOFT_BURST("Burst"),
-    FLOWER("Flower"),
-    CLOVER_4("Clover"),
-    CLOVER_8("Clover 8"),
-    PUFFY("Puffy"),
-    GEM("Gem"),
-    PENTAGON("Pentagon"),
-    CIRCLE("Circle"),
-    SQUARE("Square"),
-}
-
 enum class TapAction(val label: String) {
     HIATUS("Hiatus"),
     APP("App…"),
     REFRESH("Refresh"),
 }
 
+/** The one Hiatus widget: time away today. Everything here is about how it looks. */
 data class WidgetConfig(
-    val style: WidgetStyle = WidgetStyle.AWAY,
-    val metric: Metric = Metric.AWAY_TODAY,
-    val stats: List<Metric> = listOf(Metric.LONGEST_AWAY, Metric.LAST_AWAY, Metric.UNLOCKS, Metric.SCREEN_TIME),
-    val decoration: Boolean = true, // Away style: a soft Material shape tucked into the corner
     val showLabel: Boolean = true,
     val customLabel: String = "",
     val uppercaseLabel: Boolean = false,
@@ -105,30 +62,23 @@ data class WidgetConfig(
     val font: FontSpec = FontSpec(weight = 500),
     val fontForLabels: Boolean = false,
     val useWallpaperColors: Boolean = true,
-    val role: ColorRole = ColorRole.PRIMARY,
-    val theme: ThemeMode = ThemeMode.SYSTEM,
-    val bgColor: Int = 0xFF0E0F13.toInt(),
+    val role: ColorRole = ColorRole.SURFACE,
+    val theme: ThemeMode = ThemeMode.DARK,
+    val bgColor: Int = 0xFF1B1B1F.toInt(),
     val numberColor: Int = 0xFFB8C4FF.toInt(),
     val textColor: Int = 0xFFE4E2E6.toInt(),
     val background: Boolean = true,
     val bgOpacity: Int = 100,
-    val cornerRadius: Int = 28,
+    val systemCorners: Boolean = true, // same roundness as the phone's other widgets
+    val cornerRadius: Int = 24,
     val sizePercent: Int = 100,
     val align: HAlign = HAlign.START,
-    val goalMinutes: Int = 180,
-    val wavy: Boolean = true,
-    val shape: ShapeKind = ShapeKind.COOKIE_9,
-    val appsCount: Int = 4,
     val tapAction: TapAction = TapAction.HIATUS,
     val tapPackage: String = "",
 ) {
-    /** Label shown above the number. */
-    fun label(): String = customLabel.ifBlank { metric.label }.let { if (uppercaseLabel) it.uppercase() else it }
+    fun label(): String = customLabel.ifBlank { "Away today" }.let { if (uppercaseLabel) it.uppercase() else it }
 
     fun toJson(): String = JSONObject().apply {
-        put("style", style.name)
-        put("metric", metric.name)
-        put("stats", JSONArray(stats.map { it.name }))
         put("showLabel", showLabel)
         put("customLabel", customLabel)
         put("uppercaseLabel", uppercaseLabel)
@@ -149,14 +99,10 @@ data class WidgetConfig(
         put("textColor", textColor)
         put("background", background)
         put("bgOpacity", bgOpacity)
+        put("systemCorners", systemCorners)
         put("cornerRadius", cornerRadius)
         put("sizePercent", sizePercent)
         put("align", align.name)
-        put("goalMinutes", goalMinutes)
-        put("wavy", wavy)
-        put("shape", shape.name)
-        put("decoration", decoration)
-        put("appsCount", appsCount)
         put("tapAction", tapAction.name)
         put("tapPackage", tapPackage)
     }.toString()
@@ -169,13 +115,7 @@ data class WidgetConfig(
             val d = WidgetConfig()
             return try {
                 val o = JSONObject(s)
-                val stats = o.optJSONArray("stats")?.let { a ->
-                    (0 until a.length()).mapNotNull { i -> Metric.entries.firstOrNull { it.name == a.optString(i) } }
-                } ?: d.stats
                 WidgetConfig(
-                    style = enumOr(o.optString("style"), d.style),
-                    metric = enumOr(o.optString("metric"), d.metric),
-                    stats = stats,
                     showLabel = o.optBoolean("showLabel", d.showLabel),
                     customLabel = o.optString("customLabel", d.customLabel),
                     uppercaseLabel = o.optBoolean("uppercaseLabel", d.uppercaseLabel),
@@ -198,14 +138,10 @@ data class WidgetConfig(
                     textColor = o.optInt("textColor", d.textColor),
                     background = o.optBoolean("background", d.background),
                     bgOpacity = o.optInt("bgOpacity", d.bgOpacity),
+                    systemCorners = o.optBoolean("systemCorners", d.systemCorners),
                     cornerRadius = o.optInt("cornerRadius", d.cornerRadius),
                     sizePercent = o.optInt("sizePercent", d.sizePercent),
                     align = enumOr(o.optString("align"), d.align),
-                    goalMinutes = o.optInt("goalMinutes", d.goalMinutes),
-                    wavy = o.optBoolean("wavy", d.wavy),
-                    shape = enumOr(o.optString("shape"), d.shape),
-                    decoration = o.optBoolean("decoration", d.decoration),
-                    appsCount = o.optInt("appsCount", d.appsCount),
                     tapAction = enumOr(o.optString("tapAction"), d.tapAction),
                     tapPackage = o.optString("tapPackage", d.tapPackage),
                 )
@@ -216,9 +152,12 @@ data class WidgetConfig(
     }
 }
 
-/** Per-widget settings. New widgets start from whatever was edited last. */
+/**
+ * Per-widget settings. New widgets start from whatever was edited last. The prefs file is new as of 0.6.0
+ * ("widget"): the old one held looks that no longer exist, so every widget starts fresh on the new default.
+ */
 object ConfigStore {
-    private const val PREFS = "widget_configs"
+    private const val PREFS = "widget"
     private const val LAST = "last"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -242,11 +181,23 @@ object ConfigStore {
     }
 }
 
-/** App-wide settings (prefs `ui`). */
+/** App-wide tracking settings (prefs `ui`). */
 object AppPrefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("ui", Context.MODE_PRIVATE)
 
-    /** Shortest break that counts as "away", in minutes. */
+    /** Shortest gap that counts as a break, in minutes. */
     fun minBreakMinutes(ctx: Context): Int = p(ctx).getInt("min_break", 1)
     fun setMinBreakMinutes(ctx: Context, m: Int) = p(ctx).edit().putInt("min_break", m).apply()
+
+    fun excludeSleep(ctx: Context): Boolean = p(ctx).getBoolean("exclude_sleep", false)
+    fun setExcludeSleep(ctx: Context, on: Boolean) = p(ctx).edit().putBoolean("exclude_sleep", on).apply()
+
+    /** Bedtime and wake-up, minutes after midnight. */
+    fun bedtime(ctx: Context): Int = p(ctx).getInt("bedtime", 23 * 60)
+    fun wakeTime(ctx: Context): Int = p(ctx).getInt("wake", 7 * 60)
+    fun setBedtime(ctx: Context, m: Int) = p(ctx).edit().putInt("bedtime", m).apply()
+    fun setWakeTime(ctx: Context, m: Int) = p(ctx).edit().putInt("wake", m).apply()
+
+    /** The sleep window to leave out, or null when sleep counts as away. */
+    fun sleep(ctx: Context): Sleep? = if (excludeSleep(ctx)) Sleep(bedtime(ctx), wakeTime(ctx)) else null
 }
