@@ -245,9 +245,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class EditorPage(val title: String) {
-    STYLE("Style"), CONTENT("Content"), FONT("Font"), COLOURS("Colours"), LAYOUT("Layout"), TAP("On tap"),
+private enum class EditorPage(val title: String, val parent: EditorPage?) {
+    CUSTOMISE("Customise", null),
+    TAP("On tap", null),
+    STYLE("Style", CUSTOMISE),
+    CONTENT("Content", CUSTOMISE),
+    FONT("Font", CUSTOMISE),
+    COLOURS("Colours", CUSTOMISE),
+    LAYOUT("Layout", CUSTOMISE),
 }
+
+private fun depth(p: EditorPage?): Int = if (p == null) 0 else 1 + depth(p.parent)
+
+/** A preset counts as chosen while the look still matches it (font and tap action are the user's own). */
+private fun matches(cfg: WidgetConfig, preset: Preset): Boolean =
+    cfg.copy(font = preset.config.font, fontForLabels = preset.config.fontForLabels, tapAction = preset.config.tapAction, tapPackage = preset.config.tapPackage) == preset.config
+
+private fun applyPreset(cfg: WidgetConfig, preset: Preset): WidgetConfig =
+    preset.config.copy(font = cfg.font, fontForLabels = cfg.fontForLabels, tapAction = cfg.tapAction, tapPackage = cfg.tapPackage)
 
 /** Plausible numbers so previews look right before usage access is granted. */
 internal fun sampleReport(ctx: Context): Report {
@@ -282,7 +297,7 @@ private fun fontName(cfg: WidgetConfig): String {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun WidgetEditor(launchId: Int, report: Report?) {
+fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
@@ -315,7 +330,7 @@ fun WidgetEditor(launchId: Int, report: Report?) {
     fun update(c: WidgetConfig) { cfg = c; commit() }
 
     var page by rememberSaveable { mutableStateOf<EditorPage?>(null) }
-    BackHandler(enabled = page != null) { page = null }
+    BackHandler(enabled = page != null) { page = page?.parent }
     var showAppPicker by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     val pinSupported = remember { AppWidgetManager.getInstance(ctx).isRequestPinAppWidgetSupported }
@@ -325,7 +340,7 @@ fun WidgetEditor(launchId: Int, report: Report?) {
         targetState = page,
         transitionSpec = {
             // Material shared-axis X: forward slides in from the right, back from the left.
-            val dir = if (targetState != null) 1 else -1
+            val dir = if (depth(targetState) > depth(initialState)) 1 else -1
             (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> dir * w / 6 } + fadeIn(tween(220, delayMillis = 60)))
                 .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> -dir * w / 6 } + fadeOut(tween(120)))
         },
@@ -337,16 +352,14 @@ fun WidgetEditor(launchId: Int, report: Report?) {
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 LargeTopAppBar(
-                    title = { Text(shown?.title ?: "Widgets") },
+                    title = { Text(shown?.title ?: if (onDone != null) "New widget" else "Widgets") },
                     navigationIcon = {
-                        if (shown != null) IconButton(onClick = { page = null }) {
+                        if (shown != null) IconButton(onClick = { page = shown.parent }) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                         }
                     },
                     actions = {
-                        if (shown == null) IconButton(onClick = { confirmReset = true }) {
-                            Icon(Icons.Rounded.RestartAlt, contentDescription = "Reset widget")
-                        }
+                        if (onDone != null) Button(onClick = onDone, modifier = Modifier.padding(end = 12.dp)) { Text("Done") }
                     },
                     scrollBehavior = scroll,
                     // The preview stays pinned, so nothing scrolls under the bar.
@@ -390,32 +403,33 @@ fun WidgetEditor(launchId: Int, report: Report?) {
                                     ListItem(
                                         leadingContent = { RowIcon(Icons.Rounded.Widgets) },
                                         headlineContent = { Text("No widget yet") },
-                                        supportingContent = { Text(if (pinSupported) "Changes here apply to the next one you add" else "Long-press home screen → Widgets") },
+                                        supportingContent = { Text(if (pinSupported) "Pick a look, then add it" else "Add one from your home screen's widget list") },
                                         trailingContent = if (pinSupported) { { FilledTonalButton(onClick = { pin() }) { Text("Add") } } } else null,
                                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                     )
                                 }
                             }
-                            Group {
-                                item { NavRow(Icons.Rounded.Dashboard, "Style", cfg.style.label) { page = EditorPage.STYLE } }
-                                item {
-                                    val v = when (cfg.style) {
-                                        WidgetStyle.TILES -> cfg.stats.joinToString(", ") { it.label }
-                                        WidgetStyle.CHART -> "Screen time by hour"
-                                        WidgetStyle.APPS -> "${cfg.appsCount} apps"
-                                        else -> cfg.metric.label + " · " + cfg.format.label
+                            SectionTitle("Looks")
+                            Presets.all.chunked(2).forEach { pair ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    pair.forEach { pr ->
+                                        val sel = matches(cfg, pr)
+                                        LookCard(pr.name, applyPreset(cfg, pr), data, sel, fontVersion, Modifier.weight(1f)) {
+                                            if (!sel) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            update(applyPreset(cfg, pr))
+                                        }
                                     }
-                                    NavRow(Icons.Rounded.Insights, "Content", v) { page = EditorPage.CONTENT }
-                                }
-                                item { NavRow(Icons.Rounded.TextFields, "Font", fontName(cfg)) { page = EditorPage.FONT } }
-                                item {
-                                    val v = if (cfg.useWallpaperColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                                        "Wallpaper · ${cfg.role.label}" else "Custom"
-                                    NavRow(Icons.Rounded.Palette, "Colours", v) { page = EditorPage.COLOURS }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
                             }
                             Group {
-                                item { NavRow(Icons.Rounded.AspectRatio, "Layout", "${cfg.sizePercent}% · ${cfg.align.label}") { page = EditorPage.LAYOUT } }
+                                item {
+                                    val custom = Presets.all.none { matches(cfg, it) }
+                                    NavRow(
+                                        Icons.Rounded.Tune, "Customise",
+                                        (if (custom) "Custom · " else "") + cfg.style.label + " · " + fontName(cfg).substringBefore(" ·"),
+                                    ) { page = EditorPage.CUSTOMISE }
+                                }
                                 item {
                                     val v = when (cfg.tapAction) {
                                         TapAction.APP -> if (cfg.tapPackage.isEmpty()) "App" else remember(cfg.tapPackage) { appLabel(ctx, cfg.tapPackage) }
@@ -428,11 +442,44 @@ fun WidgetEditor(launchId: Int, report: Report?) {
                             }
                         }
 
+                        EditorPage.CUSTOMISE -> {
+                            Group {
+                                item { NavRow(Icons.Rounded.Dashboard, "Style", cfg.style.label) { page = EditorPage.STYLE } }
+                                item {
+                                    val v = when (cfg.style) {
+                                        WidgetStyle.TILES -> cfg.stats.joinToString(", ") { it.label }
+                                        WidgetStyle.CHART -> "Screen time by hour"
+                                        WidgetStyle.APPS -> "${cfg.appsCount} apps"
+                                        WidgetStyle.RING -> "Goal " + Fmt.dur(cfg.goalMinutes * 60_000L)
+                                        else -> cfg.metric.label
+                                    }
+                                    NavRow(Icons.Rounded.Insights, "Content", v) { page = EditorPage.CONTENT }
+                                }
+                                item { NavRow(Icons.Rounded.TextFields, "Font", fontName(cfg)) { page = EditorPage.FONT } }
+                                item {
+                                    val v = if (cfg.useWallpaperColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                                        "Wallpaper · ${cfg.role.label}" else "Custom"
+                                    NavRow(Icons.Rounded.Palette, "Colours", v) { page = EditorPage.COLOURS }
+                                }
+                                item { NavRow(Icons.Rounded.AspectRatio, "Layout", "${cfg.sizePercent}% · ${cfg.align.label}") { page = EditorPage.LAYOUT } }
+                            }
+                            Group {
+                                item {
+                                    ListItem(
+                                        modifier = Modifier.clickable { confirmReset = true },
+                                        leadingContent = { RowIcon(Icons.Rounded.RestartAlt) },
+                                        headlineContent = { Text("Reset to default") },
+                                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    )
+                                }
+                            }
+                        }
+
                         EditorPage.STYLE -> {
                             WidgetStyle.entries.chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     pair.forEach { st ->
-                                        StyleCard(st, cfg, data, st == cfg.style, fontVersion, Modifier.weight(1f)) {
+                                        LookCard(st.label, cfg.copy(style = st), data, st == cfg.style, fontVersion, Modifier.weight(1f)) {
                                             if (st != cfg.style) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             update(cfg.copy(style = st))
                                         }
@@ -716,17 +763,25 @@ private fun PreviewCard(cfg: WidgetConfig, id: Int, data: Report, fontVersion: I
     }
 }
 
-/** Style tile: live thumbnail at that style's usual size, label below. */
 @Composable
-private fun StyleCard(
-    style: WidgetStyle, cfg: WidgetConfig, data: Report, selected: Boolean, fontVersion: Int,
+private fun SectionTitle(text: String) {
+    Text(
+        text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+    )
+}
+
+/** A look (preset or style): live thumbnail at its usual size, name below. */
+@Composable
+private fun LookCard(
+    name: String, look: WidgetConfig, data: Report, selected: Boolean, fontVersion: Int,
     modifier: Modifier, onClick: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
-    val thumb = remember(cfg, style, data, fontVersion) {
-        val s = Widgets.size(ctx, -1, style)
-        WidgetRenderer.render(ctx, cfg.copy(style = style), s.w, s.h, s.dp, data).asImageBitmap()
+    val thumb = remember(look, data, fontVersion) {
+        val s = Widgets.size(ctx, -1, look.style)
+        WidgetRenderer.render(ctx, look, s.w, s.h, s.dp, data).asImageBitmap()
     }
     val outline by animateColorAsState(if (selected) scheme.primary else Color.Transparent, tween(250), label = "cardOutline")
     val corner by animateDpAsState(if (selected) 32.dp else 20.dp, spring(stiffness = Spring.StiffnessMediumLow), label = "cardCorner")
@@ -742,14 +797,14 @@ private fun StyleCard(
                 .background(Brush.linearGradient(listOf(scheme.primaryContainer, Color(0xFF1A1C22))))
                 .border(BorderStroke(2.dp, outline), RoundedCornerShape(corner - 8.dp)),
         ) {
-            Image(thumb, style.label, Modifier.fillMaxSize().padding(10.dp), contentScale = ContentScale.Fit)
+            Image(thumb, name, Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
         }
         Row(Modifier.padding(top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AnimatedVisibility(selected) {
                 Icon(Icons.Rounded.Check, null, tint = scheme.onSecondaryContainer, modifier = Modifier.padding(end = 4.dp).size(18.dp))
             }
             Text(
-                style.label, style = MaterialTheme.typography.labelLarge,
+                name, style = MaterialTheme.typography.labelLarge,
                 color = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant, maxLines = 1,
             )
         }

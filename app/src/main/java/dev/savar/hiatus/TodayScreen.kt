@@ -334,10 +334,14 @@ private fun PermissionCard() {
         )
         Spacer(Modifier.height(28.dp))
         Button(onClick = { openUsageAccess(ctx) }, modifier = Modifier.height(56.dp)) {
-            Icon(Icons.Rounded.DataUsage, null, Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
             Text("Allow usage access", style = MaterialTheme.typography.titleMedium)
         }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Find Hiatus in the list and switch it on",
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -406,11 +410,18 @@ private fun WeekCard(days: List<DayStats>, sel: Int, onSelect: (Int) -> Unit) {
     val max = days.maxOf { it.screenTimeMs }.coerceAtLeast(3_600_000L)
     val tracked = days.filter { it.screenTimeMs > 0 }
     val avg = if (tracked.isEmpty()) 0L else tracked.sumOf { it.screenTimeMs } / tracked.size
-    val letter = remember { SimpleDateFormat("EEEEE", Locale.getDefault()) }
+    val dayFmt = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
     Surface(color = scheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp)) {
-            Text("This week", style = MaterialTheme.typography.titleMedium)
-            Text("Daily average " + Fmt.dur(avg), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    Text("This week", style = MaterialTheme.typography.titleMedium)
+                    Text("Daily average " + Fmt.dur(avg), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                }
+                AnimatedContent(Fmt.dur(days[sel].screenTimeMs), label = "selTotal") { v ->
+                    Text(richDuration(v), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium, color = scheme.primary)
+                }
+            }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth().height(148.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 days.forEachIndexed { i, d ->
@@ -431,7 +442,7 @@ private fun WeekCard(days: List<DayStats>, sel: Int, onSelect: (Int) -> Unit) {
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            letter.format(Date(d.start)),
+                            dayFmt.format(Date(d.start)),
                             style = MaterialTheme.typography.labelLarge,
                             color = if (selected) scheme.primary else scheme.onSurfaceVariant,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
@@ -512,14 +523,10 @@ private fun DonutCard(day: DayStats, isToday: Boolean) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun StatRow(icon: ImageVector, shape: androidx.graphics.shapes.RoundedPolygon, title: String, value: String, supporting: String? = null) {
+private fun StatRow(icon: ImageVector, title: String, value: String, supporting: String? = null) {
     val scheme = MaterialTheme.colorScheme
     ListItem(
-        leadingContent = {
-            Box(Modifier.size(40.dp).clip(shape.toShape()).background(scheme.secondaryContainer), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = scheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
-            }
-        },
+        leadingContent = { RowIcon(icon) },
         headlineContent = { Text(title) },
         supportingContent = supporting?.let { { Text(it) } },
         trailingContent = { Text(value, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface) },
@@ -530,12 +537,12 @@ private fun StatRow(icon: ImageVector, shape: androidx.graphics.shapes.RoundedPo
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StatsGroup(d: DayStats, isToday: Boolean) {
-    Group("At a glance") {
-        item { StatRow(Icons.Rounded.SelfImprovement, MaterialShapes.Cookie9Sided, if (isToday) "Away so far" else "Away", Fmt.dur(d.awayMs)) }
-        item { StatRow(Icons.Rounded.Spa, MaterialShapes.Flower, "Longest away", Fmt.dur(d.longestAwayMs)) }
-        item { StatRow(Icons.Rounded.LockOpen, MaterialShapes.Pill, "Unlocks", d.unlocks.toString()) }
-        item { StatRow(Icons.Rounded.TouchApp, MaterialShapes.SoftBurst, "Screen wakes", d.pickups.toString(), "Includes glances at the lock screen") }
-        item { StatRow(Icons.Rounded.Timelapse, MaterialShapes.Sunny, "Per session", Fmt.dur(d.avgSessionMs), "${d.sessions} sessions") }
+    Group(if (isToday) "Today" else "That day") {
+        item { StatRow(Icons.Rounded.SelfImprovement, if (isToday) "Away so far" else "Away", Fmt.dur(d.awayMs)) }
+        item { StatRow(Icons.Rounded.Spa, "Longest break", Fmt.dur(d.longestAwayMs)) }
+        item { StatRow(Icons.Rounded.LockOpen, "Unlocks", d.unlocks.toString()) }
+        item { StatRow(Icons.Rounded.Visibility, "Screen wakes", d.pickups.toString()) }
+        item { StatRow(Icons.Rounded.Timelapse, "Per session", Fmt.dur(d.avgSessionMs), "${d.sessions} sessions") }
     }
 }
 
@@ -625,7 +632,10 @@ private fun AppRow(a: AppUsage, frac: Float) {
                 Text(Fmt.dur(a.ms), style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(8.dp))
-            LinearWavyProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth())
+            val w by animateFloatAsState(frac.coerceIn(0.02f, 1f), tween(700, easing = FastOutSlowInEasing), label = "appBar")
+            Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(scheme.surfaceContainerHighest)) {
+                Box(Modifier.fillMaxWidth(w).fillMaxHeight().clip(RoundedCornerShape(50)).background(scheme.primary))
+            }
         }
     }
 }

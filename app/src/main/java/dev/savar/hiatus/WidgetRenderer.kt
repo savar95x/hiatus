@@ -191,34 +191,55 @@ object WidgetRenderer {
         }
     }
 
-    /** Draws [text] fitted inside [box] (as big as possible, × sizePercent). Returns the digit height used. */
-    private fun bigNumber(
-        c: Canvas, text: String, box: RectF, cfg: WidgetConfig, f: Fonts, color: Int,
-        center: Boolean, maxSize: Float = Float.MAX_VALUE, end: Boolean = false,
-    ): Float {
-        if (box.width() <= 0 || box.height() <= 0) return 0f
+    /** Text size at which [text] fills w×h (digit height), capped by [maxCap] (digit height) and × sizePercent. */
+    private fun fitSize(text: String, w: Float, h: Float, cfg: WidgetConfig, f: Fonts, maxCap: Float = Float.MAX_VALUE): Float {
+        if (w <= 0 || h <= 0) return 0f
         val r = rich(text, cfg)
         val cap = capRatio(f.number)
-        val byH = box.height() / cap
-        val byW = box.width() / max(1f, richWidth(r, 1f, f.number))
-        val size = min(min(byH, byW), maxSize) * (cfg.sizePercent / 100f).coerceIn(0.4f, 1.3f)
-        val fitted = min(size, byW) // never overflow sideways
-        val w = richWidth(r, fitted, f.number)
+        val byW = w / max(1f, richWidth(r, 1f, f.number))
+        val size = min(min(h, maxCap) / cap, byW) * (cfg.sizePercent / 100f).coerceIn(0.4f, 1.3f)
+        return min(size, byW) // never overflow sideways
+    }
+
+    /** Draws a fitted number with its baseline at [baseline]; x from [box] and alignment. */
+    private fun numberAt(
+        c: Canvas, text: String, box: RectF, baseline: Float, size: Float, cfg: WidgetConfig, f: Fonts, color: Int,
+        center: Boolean, end: Boolean = false,
+    ) {
+        val r = rich(text, cfg)
+        val w = richWidth(r, size, f.number)
         val x = when {
             end -> box.right - w
             center -> box.centerX() - w / 2
             else -> box.left
         }
-        val baseline = box.centerY() + fitted * cap / 2
-        drawRich(c, r, x, baseline, fitted, color, f.number)
-        return fitted * cap
+        drawRich(c, r, x, baseline, size, color, f.number)
     }
 
-    private fun line(c: Canvas, s: String, box: RectF, baseline: Float, p: TextPaint, center: Boolean) {
+    /** Draws [text] as big as fits inside [box], vertically centred. Returns the digit height used. */
+    private fun bigNumber(
+        c: Canvas, text: String, box: RectF, cfg: WidgetConfig, f: Fonts, color: Int,
+        center: Boolean, maxCap: Float = Float.MAX_VALUE, end: Boolean = false,
+    ): Float {
+        val size = fitSize(text, box.width(), box.height(), cfg, f, maxCap)
+        if (size <= 0) return 0f
+        val capH = size * capRatio(f.number)
+        numberAt(c, text, box, box.centerY() + capH / 2, size, cfg, f, color, center, end)
+        return capH
+    }
+
+    private fun line(c: Canvas, s: String, box: RectF, baseline: Float, p: TextPaint, center: Boolean, end: Boolean = false) {
         val t = TextUtils.ellipsize(s, p, box.width(), TextUtils.TruncateAt.END).toString()
-        val x = if (center) box.centerX() - p.measureText(t) / 2 else box.left
+        val x = when {
+            end -> box.right - p.measureText(t)
+            center -> box.centerX() - p.measureText(t) / 2
+            else -> box.left
+        }
         c.drawText(t, x, baseline, p)
     }
+
+    private fun labelText(cfg: WidgetConfig, fallback: String) =
+        cfg.customLabel.ifBlank { fallback }.let { if (cfg.uppercaseLabel) it.uppercase() else it }
 
     // ---------------------------------------------------------------- entry
 
@@ -240,12 +261,13 @@ object WidgetRenderer {
             c.drawRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), rad, rad, bg)
         }
 
-        val pad = (if (min(wDp, hDp) < 130) 14f else 18f) * d
+        // Material widget padding: 16dp, a little less on the smallest sizes.
+        val pad = (if (min(wDp, hDp) < 130) 14f else 16f) * d
         val area = RectF(pad, pad, w - pad, h - pad)
         val center = cfg.align == HAlign.CENTER
 
         if (report == null) {
-            hero(ctx, c, area, d, cfg, p, f, "—", cfg.label(), "Tap to allow usage access", center)
+            hero(c, area, d, cfg, p, f, "—", cfg.label(), "Tap to allow usage access", center)
             return bmp
         }
 
@@ -253,9 +275,9 @@ object WidgetRenderer {
         val caption = Metrics.caption(ctx, cfg.metric, report, cfg.format)
 
         when (cfg.style) {
-            WidgetStyle.HERO -> hero(ctx, c, area, d, cfg, p, f, value, cfg.label(), caption, center)
-            WidgetStyle.RING -> ring(ctx, c, area, d, cfg, p, f, report, value, caption, center)
-            WidgetStyle.SHAPE -> shape(c, area, d, cfg, p, f, value, center)
+            WidgetStyle.HERO -> hero(c, area, d, cfg, p, f, value, cfg.label(), caption, center)
+            WidgetStyle.RING -> ring(c, area, d, cfg, p, f, report, value, caption, center)
+            WidgetStyle.SHAPE -> shape(c, area, d, cfg, p, f, report, value, caption)
             WidgetStyle.TILES -> tiles(c, area, d, cfg, p, f, report, cfg.stats)
             WidgetStyle.CHART -> chart(c, area, d, cfg, p, f, report)
             WidgetStyle.APPS -> apps(ctx, c, area, d, cfg, p, f, report, header = hDp > 120)
@@ -266,65 +288,79 @@ object WidgetRenderer {
 
     // ---------------------------------------------------------------- pieces
 
-    /** Label, big number, caption. Drops the caption, then the label, as space runs out. */
+    /**
+     * Label on top; number and caption anchored to the bottom (centred as a group when [center]).
+     * Drops the caption, then the label, as space runs out.
+     */
     private fun hero(
-        ctx: Context, c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts,
+        c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts,
         value: String, label: String, caption: String, center: Boolean,
     ) {
-        val small = (r.height() * 0.12f).coerceIn(10f * d, 15f * d)
+        val small = (min(r.width(), r.height()) * 0.1f).coerceIn(11f * d, 14f * d)
         val lp = paint(small, p.sub, f.label).apply { if (cfg.uppercaseLabel) letterSpacing = 0.08f }
-        val cp = paint(small * 0.95f, p.sub, f.body)
-        val showLabel = cfg.showLabel && r.height() > 56 * d
-        val showCaption = cfg.showCaption && r.height() > 88 * d
-        var top = r.top
-        var bottom = r.bottom
-        if (showLabel) {
-            line(c, label, r, r.top + small, lp, center)
-            top += small * 1.7f
+        val cp = paint(small, p.sub, f.body)
+        val showLabel = cfg.showLabel && r.height() > 60 * d
+        val showCaption = cfg.showCaption && r.height() > 92 * d
+        val labelBlock = if (showLabel) small * 1.9f else 0f
+        val captionBlock = if (showCaption) small * 1.75f else 0f
+        val numAvail = r.height() - labelBlock - captionBlock
+        val size = fitSize(value, r.width(), numAvail, cfg, f, maxCap = min(r.width(), r.height()) * 0.42f)
+        val capH = size * capRatio(f.number)
+        if (center) {
+            val group = labelBlock + capH + captionBlock
+            val top = r.top + (r.height() - group) / 2
+            if (showLabel) line(c, label, r, top + small, lp, true)
+            val base = top + labelBlock + capH
+            numberAt(c, value, r, base, size, cfg, f, p.number, true)
+            if (showCaption) line(c, caption, r, base + small * 1.75f, cp, true)
+        } else {
+            if (showLabel) line(c, label, r, r.top + small, lp, false)
+            val capBase = r.bottom - small * 0.2f
+            val numBase = if (showCaption) capBase - small * 1.55f else r.bottom
+            numberAt(c, value, r, numBase, size, cfg, f, p.number, false)
+            if (showCaption) line(c, caption, r, capBase, cp, false)
         }
-        if (showCaption) {
-            line(c, caption, r, r.bottom - small * 0.15f, cp, center)
-            bottom -= small * 1.6f
-        }
-        bigNumber(c, value, RectF(r.left, top, r.right, bottom), cfg, f, p.number, center)
     }
 
+    /** Screen time against the daily goal. Wide widgets show the chosen stat beside the ring. */
     private fun ring(
-        ctx: Context, c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts,
+        c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts,
         report: Report, value: String, caption: String, center: Boolean,
     ) {
-        val goal = cfg.goalMinutes.coerceAtLeast(1) * 60_000f
-        val frac = (report.today.screenTimeMs / goal).coerceIn(0f, 1f)
-        val wide = r.width() > r.height() * 1.5f
+        val goalMs = cfg.goalMinutes.coerceAtLeast(1) * 60_000L
+        val st = report.today.screenTimeMs
+        val frac = (st / goalMs.toFloat()).coerceIn(0f, 1f)
+        val wide = r.width() > r.height() * 1.45f
         val diam = if (wide) r.height() else min(r.width(), r.height())
         val box = if (wide) RectF(r.left, r.top, r.left + diam, r.bottom)
         else RectF(r.centerX() - diam / 2, r.centerY() - diam / 2, r.centerX() + diam / 2, r.centerY() + diam / 2)
-        val stroke = diam * 0.085f
+        val stroke = diam * 0.075f
         drawRing(c, box, stroke, frac, p.number, p.track, cfg.wavy)
 
-        val inner = diam - stroke * 2
+        val inner = diam - stroke * 3.2f
+        val tb = RectF(box.centerX() - inner * 0.4f, box.top, box.centerX() + inner * 0.4f, box.bottom)
+        val ls = (inner * 0.11f).coerceIn(9f * d, 14f * d)
+        val sp = paint(ls, p.sub, f.body)
+        val goalText = "of " + Fmt.dur(goalMs, cfg.format)
         if (wide) {
-            // Ring holds screen time vs the goal; the chosen metric sits beside it.
-            val tb = RectF(box.left + stroke * 1.9f, box.top, box.right - stroke * 1.9f, box.bottom)
-            val pct = (report.today.screenTimeMs * 100 / goal).roundToInt()
-            val sp = paint(inner * 0.13f, p.sub, f.label)
-            bigNumber(c, "$pct%", RectF(tb.left, tb.centerY() - inner * 0.2f, tb.right, tb.centerY() + inner * 0.08f), cfg, f, p.number, true)
-            line(c, "of " + Fmt.dur(goal.toLong(), cfg.format), tb, tb.centerY() + inner * 0.27f, sp, true)
-            val gap = 16 * d
-            hero(ctx, c, RectF(box.right + gap, r.top, r.right, r.bottom), d, cfg, p, f, value, cfg.label(), caption, center)
+            val pct = (st * 100 / goalMs).toInt()
+            val capH = bigNumber(c, "$pct%", RectF(tb.left, box.centerY() - inner * 0.22f, tb.right, box.centerY() + inner * 0.06f), cfg, f, p.number, true)
+            line(c, goalText, tb, box.centerY() + inner * 0.06f + ls * 1.6f, sp, true)
+            if (capH <= 0) return
+            hero(c, RectF(box.right + 18 * d, r.top, r.right, r.bottom), d, cfg, p, f, value, cfg.label(), caption, center)
         } else {
-            val tb = RectF(box.centerX() - inner * 0.36f, box.top, box.centerX() + inner * 0.36f, box.bottom)
-            val ls = inner * 0.11f
-            val lp = paint(ls, p.sub, f.label)
-            val numTop = box.centerY() - inner * 0.2f
-            val numBottom = box.centerY() + inner * 0.12f
-            bigNumber(c, value, RectF(tb.left, numTop, tb.right, numBottom), cfg, f, p.number, true)
-            if (cfg.showLabel) line(c, cfg.label(), tb, numTop - ls * 0.6f, lp, true)
-            if (cfg.showCaption) line(c, "of " + Fmt.dur(goal.toLong(), cfg.format), tb, numBottom + ls * 1.5f, paint(ls * 0.95f, p.sub, f.body), true)
+            val showLabel = cfg.showLabel && inner > 110 * d
+            val showGoal = cfg.showCaption && inner > 70 * d
+            val numH = inner * 0.26f
+            val base = box.centerY() + numH / 2 - (if (showGoal) ls * 0.6f else 0f) + (if (showLabel) ls * 0.6f else 0f)
+            val size = fitSize(Fmt.dur(st, cfg.format), tb.width(), numH, cfg, f)
+            numberAt(c, Fmt.dur(st, cfg.format), tb, base, size, cfg, f, p.number, true)
+            if (showLabel) line(c, labelText(cfg, "Screen time"), tb, base - numH - ls * 0.7f, paint(ls, p.sub, f.label), true)
+            if (showGoal) line(c, goalText, tb, base + ls * 1.6f, sp, true)
         }
     }
 
-    /** Material 3 circular progress: track with gaps, indicator flat or wavy (Expressive). */
+    /** Material 3 circular progress: track with gaps, indicator flat or gently wavy (Expressive). */
     private fun drawRing(c: Canvas, box: RectF, stroke: Float, frac: Float, active: Int, track: Int, wavy: Boolean) {
         val rad = box.width() / 2 - stroke
         val cx = box.centerX()
@@ -333,7 +369,7 @@ object WidgetRenderer {
             style = Paint.Style.STROKE; strokeWidth = stroke; strokeCap = Paint.Cap.ROUND
         }
         val oval = RectF(cx - rad, cy - rad, cx + rad, cy + rad)
-        val gapDeg = Math.toDegrees((stroke * 1.5 / rad)).toFloat()
+        val gapDeg = Math.toDegrees((stroke * 1.4 / rad)).toFloat()
         val sweep = 360f * frac
         pp.color = track
         when {
@@ -347,99 +383,143 @@ object WidgetRenderer {
         if (frac <= 0f) return
         pp.color = active
         if (!wavy) {
-            c.drawArc(oval, -90f, max(sweep, 0.5f), false, pp)
+            if (frac >= 1f) c.drawOval(oval, pp) else c.drawArc(oval, -90f, max(sweep, 0.5f), false, pp)
             return
         }
-        val amp = stroke * 0.32f
-        val waves = (2 * PI * rad / (stroke * 3.2f)).roundToInt().coerceAtLeast(6)
+        val amp = stroke * 0.17f
+        val waves = (2 * PI * rad / (stroke * 4.6f)).roundToInt().coerceAtLeast(8)
         val path = Path()
-        val steps = max(8, (sweep * 2).toInt())
-        pp.strokeWidth = stroke * 0.8f
+        val steps = max(16, (sweep * 3).toInt())
         for (i in 0..steps) {
             val a = Math.toRadians((-90.0 + sweep * i / steps))
-            val t = (a + PI / 2)
-            val rr = rad + amp * sin(t * waves).toFloat()
+            val rr = rad + amp * sin((a + PI / 2) * waves).toFloat()
             val x = cx + rr * cos(a).toFloat()
             val y = cy + rr * sin(a).toFloat()
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
+        if (frac >= 1f) path.close()
         c.drawPath(path, pp)
     }
 
-    private fun shape(c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts, value: String, center: Boolean) {
-        val side = min(r.width(), r.height())
-        val left = if (center || r.width() - side < 8 * d) r.centerX() - side / 2 else r.left
+    /** The number inside a Material shape. Wide widgets put the label and context beside it. */
+    private fun shape(
+        c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts,
+        report: Report, value: String, caption: String,
+    ) {
+        val wide = r.width() > r.height() * 1.45f
+        val side = if (wide) r.height() else min(r.width(), r.height())
+        val left = if (wide) r.left else r.centerX() - side / 2
         val box = RectF(left, r.centerY() - side / 2, left + side, r.centerY() + side / 2)
-        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = p.track }
-        c.drawPath(shapePath(cfg.shape, box), fill)
-        val inner = RectF(box.left + side * 0.2f, box.top + side * 0.2f, box.right - side * 0.2f, box.bottom - side * 0.2f)
-        val ls = side * 0.075f
-        val lp = paint(ls, p.text, f.label).apply { if (cfg.uppercaseLabel) letterSpacing = 0.08f }
-        val numBox = RectF(inner.left, inner.centerY() - side * 0.16f, inner.right, inner.centerY() + side * 0.14f)
-        bigNumber(c, value, numBox, cfg, f, p.number, true)
-        if (cfg.showLabel) line(c, cfg.label(), inner, numBox.top - ls * 0.5f, lp, true)
+        c.drawPath(shapePath(cfg.shape, box), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = p.track })
+        val inner = RectF(box.left + side * 0.22f, box.top, box.right - side * 0.22f, box.bottom)
+        val showLabel = !wide && cfg.showLabel && side > 200 * d
+        val ls = (side * 0.07f).coerceIn(10f * d, 15f * d)
+        val numH = side * 0.2f
+        val base = box.centerY() + numH / 2 + (if (showLabel) ls * 0.7f else 0f)
+        val size = fitSize(value, inner.width(), numH, cfg, f)
+        numberAt(c, value, inner, base, size, cfg, f, p.number, true)
+        if (showLabel) line(c, cfg.label(), inner, base - numH - ls * 0.8f, paint(ls, p.text, f.label), true)
+        if (!wide) return
+
+        // Beside the shape: label, caption, and two quiet facts.
+        val col = RectF(box.right + 18 * d, r.top, r.right, r.bottom)
+        val t = (col.height() * 0.13f).coerceIn(12f * d, 16f * d)
+        val s = t * 0.86f
+        val rows = buildList {
+            if (cfg.showLabel) add(Triple(cfg.label(), t, paint(t, p.text, f.label)))
+            if (cfg.showCaption) add(Triple(caption, s, paint(s, p.sub, f.body)))
+            if (cfg.metric != Metric.SCREEN_TIME) add(Triple(Fmt.dur(report.today.screenTimeMs, cfg.format) + " screen time", s, paint(s, p.sub, f.body)))
+            if (cfg.metric != Metric.UNLOCKS) add(Triple("${report.today.unlocks} unlocks", s, paint(s, p.sub, f.body)))
+        }
+        val total = rows.sumOf { (it.second * 1.55f).toDouble() }.toFloat()
+        var y = col.centerY() - total / 2
+        for ((text, size2, pt) in rows) {
+            y += size2 * 1.55f
+            line(c, text, col, y - size2 * 0.4f, pt, false)
+        }
     }
 
-    private fun tiles(c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts, report: Report, stats: List<Metric>) {
+    /**
+     * Stat tiles. Shows as many of [stats] as fit legibly. Short, wide tiles put the label beside the value.
+     * [forceCols] pins the column count (dashboard side panel); [minH] is the smallest tile height allowed.
+     */
+    private fun tiles(
+        c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts, report: Report, stats: List<Metric>,
+        forceCols: Int? = null, minH: Float = 58 * d,
+    ) {
         if (stats.isEmpty()) return
-        val n = stats.size
         val gap = 8 * d
-        // Pick the grid whose cells are closest to a 1.6:1 card, penalising empty cells.
-        var best = 1 to n
-        var bestScore = Float.NEGATIVE_INFINITY
-        for (cols in 1..n) {
-            val rows = ceil(n / cols.toFloat()).toInt()
-            val cw = (r.width() - (cols - 1) * gap) / cols
-            val ch = (r.height() - (rows - 1) * gap) / rows
-            if (cw <= 0 || ch <= 0) continue
-            val score = -abs(ln((cw / ch) / 1.6f)) - (cols * rows - n) * 0.35f
-            if (score > bestScore) { bestScore = score; best = cols to rows }
+        val minW = 92 * d
+        var cols = 1
+        var rows = 1
+        var n = stats.size
+        search@ while (n >= 1) {
+            var bestScore = Float.NEGATIVE_INFINITY
+            var found = false
+            for (cc in (forceCols?.let { listOf(it) } ?: (1..n).toList())) {
+                val rr = ceil(n / cc.toFloat()).toInt()
+                val cw = (r.width() - (cc - 1) * gap) / cc
+                val ch = (r.height() - (rr - 1) * gap) / rr
+                if (cw < minW || ch < minH) continue
+                val score = -abs(ln((cw / ch) / 1.6f)) - (cc * rr - n) * 0.5f
+                if (score > bestScore) { bestScore = score; cols = cc; rows = rr; found = true }
+            }
+            if (found) break@search
+            n--
         }
-        val (cols, rows) = best
+        if (n < 1) { n = 1; cols = 1; rows = 1 }
         val cw = (r.width() - (cols - 1) * gap) / cols
         val ch = (r.height() - (rows - 1) * gap) / rows
         val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = p.tile }
-        stats.forEachIndexed { i, m ->
+        for (i in 0 until n) {
+            val m = stats[i]
             val col = i % cols
             val row = i / cols
-            val cell = RectF(r.left + col * (cw + gap), r.top + row * (ch + gap), r.left + col * (cw + gap) + cw, r.top + row * (ch + gap) + ch)
-            val rad = min(18 * d, min(cw, ch) * 0.3f)
+            val x0 = r.left + col * (cw + gap)
+            val y0 = r.top + row * (ch + gap)
+            val cell = RectF(x0, y0, x0 + cw, y0 + ch)
+            val rad = min(16 * d, min(cw, ch) * 0.32f)
             c.drawRoundRect(cell, rad, rad, tp)
-            val inPad = min(12 * d, min(cw, ch) * 0.16f)
-            val inner = RectF(cell.left + inPad, cell.top + inPad, cell.right - inPad, cell.bottom - inPad)
-            val ls = (ch * 0.16f).coerceIn(8 * d, 12 * d)
-            val withLabel = ch > 46 * d
-            if (withLabel) line(c, m.label, inner, inner.top + ls, paint(ls, p.sub, f.label), false)
-            val numTop = if (withLabel) inner.top + ls * 1.6f else inner.top
-            bigNumber(
-                c, Metrics.value(m, report, cfg.format), RectF(inner.left, numTop, inner.right, inner.bottom),
-                cfg, f, p.number, false, maxSize = 30 * d,
-            )
+            val v = Metrics.value(m, report, cfg.format)
+            if (ch < 64 * d && cw > 140 * d) {
+                // Row tile: label left, value right.
+                val inner = RectF(cell.left + 14 * d, cell.top, cell.right - 14 * d, cell.bottom)
+                val ls = 12.5f * d
+                val size = fitSize(v, inner.width() * 0.55f, ch * 0.42f, cfg, f)
+                val vw = richWidth(rich(v, cfg), size, f.number)
+                line(c, m.label, RectF(inner.left, 0f, inner.right - vw - 8 * d, 0f), cell.centerY() + ls * 0.36f, paint(ls, p.sub, f.label), false)
+                numberAt(c, v, inner, cell.centerY() + size * capRatio(f.number) / 2, size, cfg, f, p.number, false, end = true)
+            } else {
+                val inPad = min(14 * d, min(cw, ch) * 0.16f)
+                val inner = RectF(cell.left + inPad, cell.top + inPad, cell.right - inPad, cell.bottom - inPad)
+                val ls = (ch * 0.14f).coerceIn(10.5f * d, 13f * d)
+                line(c, m.label, inner, inner.top + ls, paint(ls, p.sub, f.label), false)
+                val avail = inner.height() - ls * 1.7f
+                val size = fitSize(v, inner.width(), avail, cfg, f, maxCap = ch * 0.34f)
+                numberAt(c, v, inner, inner.bottom, size, cfg, f, p.number, false)
+            }
         }
     }
 
     private fun chart(c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts, report: Report) {
         val day = report.today
-        val headH = (r.height() * 0.26f).coerceAtMost(40 * d)
-        val ls = (headH * 0.36f).coerceIn(10 * d, 14 * d)
-        if (cfg.showLabel) {
-            val lbl = cfg.customLabel.ifBlank { "Screen time" }.let { if (cfg.uppercaseLabel) it.uppercase() else it }
-            line(c, lbl, RectF(r.left, r.top, r.centerX(), r.bottom), r.top + ls, paint(ls, p.sub, f.label), false)
-        }
+        val narrow = r.width() < 230 * d
+        val ls = 13f * d
+        val headH = (r.height() * 0.24f).coerceIn(22f * d, 36f * d)
+        if (cfg.showLabel) line(c, labelText(cfg, "Screen time"), RectF(r.left, 0f, r.centerX(), 0f), r.top + ls, paint(ls, p.sub, f.label), false)
         val total = Fmt.dur(day.screenTimeMs, cfg.format)
-        val tw = r.width() * 0.5f
-        bigNumber(c, total, RectF(r.right - tw, r.top, r.right, r.top + headH), cfg, f, p.number, false, maxSize = 34 * d, end = true)
+        val size = fitSize(total, r.width() * 0.5f, headH, cfg, f)
+        numberAt(c, total, r, r.top + size * capRatio(f.number), size, cfg, f, p.number, false, end = true)
         val axis = cfg.showCaption && r.height() > 110 * d
         val axisH = if (axis) 16 * d else 0f
-        val top = r.top + headH + 10 * d
-        val bottom = r.bottom - axisH
-        bars(c, RectF(r.left, top, r.right, bottom), p, day, report.now)
+        val top = r.top + headH + 12 * d
+        bars(c, RectF(r.left, top, r.right, r.bottom - axisH), p, day, report.now)
         if (axis) {
             val ap = paint(10.5f * d, p.sub, f.body)
             val unit = r.width() / (24 + 23 * 0.45f)
-            listOf(0 to "12 AM", 6 to "6 AM", 12 to "12 PM", 18 to "6 PM").forEach { (hr, s) ->
-                c.drawText(s, r.left + hr * unit * 1.45f, r.bottom - 2 * d, ap)
-            }
+            val labels = if (narrow) listOf(0 to "12a", 6 to "6a", 12 to "12p", 18 to "6p")
+            else listOf(0 to "12 AM", 6 to "6 AM", 12 to "12 PM", 18 to "6 PM")
+            labels.forEach { (hr, s) -> c.drawText(s, r.left + hr * unit * 1.45f, r.bottom - 2 * d, ap) }
         }
     }
 
@@ -456,7 +536,7 @@ object WidgetRenderer {
             bp.color = when {
                 hr == nowHour -> p.number
                 hr > nowHour -> alpha(p.track, 0.5f)
-                frac > 0f -> alpha(p.number, 0.6f)
+                frac > 0f -> alpha(p.number, 0.55f)
                 else -> p.track
             }
             c.drawRoundRect(RectF(x, r.bottom - bh, x + unit, r.bottom), unit / 2, unit / 2, bp)
@@ -471,28 +551,26 @@ object WidgetRenderer {
         var top = r.top
         if (header) {
             val ls = 13 * d
-            val lbl = cfg.customLabel.ifBlank { "Top apps" }.let { if (cfg.uppercaseLabel) it.uppercase() else it }
-            if (cfg.showLabel) line(c, lbl, r, r.top + ls, paint(ls, p.sub, f.label), false)
-            val total = Fmt.dur(report.today.screenTimeMs, cfg.format)
-            val tp = paint(ls, p.number, f.label)
-            c.drawText(total, r.right - tp.measureText(total), r.top + ls, tp)
-            top += ls * 2f
+            if (cfg.showLabel) line(c, labelText(cfg, "Top apps"), RectF(r.left, 0f, r.centerX(), 0f), r.top + ls, paint(ls, p.sub, f.label), false)
+            line(c, Fmt.dur(report.today.screenTimeMs, cfg.format), r, r.top + ls, paint(ls, p.number, f.label), false, end = true)
+            top += ls * 2.1f
         }
         if (list.isEmpty()) {
             line(c, "No app use yet", r, top + 14 * d, paint(13 * d, p.sub, f.body), false)
             return
         }
+        val narrow = r.width() < 170 * d
         val avail = r.bottom - top
-        val rowH0 = 44 * d
+        val rowH0 = if (narrow) 40 * d else 46 * d
         val rows = min(min(maxRows, list.size), max(1, (avail / rowH0).toInt()))
-        val rowH = avail / rows
+        val rowH = min(avail / rows, 64 * d)
         val maxMs = list.first().ms.coerceAtLeast(1)
         val pm = ctx.packageManager
         val ip = Paint(Paint.ANTI_ALIAS_FLAG)
         for (i in 0 until rows) {
             val a = list[i]
             val y = top + i * rowH
-            val icon = min(rowH * 0.7f, 34 * d)
+            val icon = min(rowH * 0.66f, 32 * d)
             val iy = y + (rowH - icon) / 2
             runCatching {
                 val dr = pm.getApplicationIcon(a.pkg)
@@ -500,16 +578,24 @@ object WidgetRenderer {
                 dr.draw(c)
             }
             val tx = r.left + icon + 12 * d
-            val ts = min(14 * d, rowH * 0.32f)
+            val ts = min(13.5f * d, rowH * 0.3f)
             val np = paint(ts, p.text, f.label)
-            val vp = paint(ts, p.sub, f.body)
+            val vp = paint(ts * 0.92f, p.sub, f.body)
             val v = Fmt.dur(a.ms, cfg.format)
+            val name = Usage.label(ctx, a.pkg)
+            if (narrow) {
+                // Name over time; no bar.
+                val mid = y + rowH / 2
+                line(c, name, RectF(tx, 0f, r.right, 0f), mid - ts * 0.15f, np, false)
+                line(c, v, RectF(tx, 0f, r.right, 0f), mid + ts * 1.05f, vp, false)
+                continue
+            }
             val vw = vp.measureText(v)
-            val base = y + rowH / 2 - ts * 0.15f
-            line(c, Usage.label(ctx, a.pkg), RectF(tx, y, r.right - vw - 10 * d, y + rowH), base, np, false)
+            val base = y + rowH / 2 - ts * 0.1f
+            line(c, name, RectF(tx, 0f, r.right - vw - 10 * d, 0f), base, np, false)
             c.drawText(v, r.right - vw, base, vp)
-            val barH = max(3 * d, ts * 0.28f)
-            val by = base + ts * 0.55f
+            val barH = 4 * d
+            val by = base + ts * 0.6f
             ip.color = p.track
             c.drawRoundRect(RectF(tx, by, r.right, by + barH), barH / 2, barH / 2, ip)
             ip.color = p.number
@@ -526,33 +612,26 @@ object WidgetRenderer {
         val side = cfg.stats.take(3)
         when {
             hDp >= 230 && wDp >= 230 -> {
-                val heroH = r.height() * 0.36f
+                val heroH = r.height() * 0.34f
                 val top = RectF(r.left, r.top, r.right, r.top + heroH)
                 if (wDp >= 300 && side.isNotEmpty()) {
-                    val split = top.left + top.width() * 0.52f
-                    hero(ctx, c, RectF(top.left, top.top, split - gap / 2, top.bottom), d, cfg, p, f, value, cfg.label(), caption, center)
-                    tiles(c, RectF(split + gap / 2, top.top, top.right, top.bottom), d, cfg, p, f, report, side.take(2))
+                    val split = top.left + top.width() * 0.5f
+                    hero(c, RectF(top.left, top.top, split - gap / 2, top.bottom), d, cfg, p, f, value, cfg.label(), caption, center)
+                    tiles(c, RectF(split + gap / 2, top.top, top.right, top.bottom), d, cfg, p, f, report, side.take(2), forceCols = 1, minH = 36 * d)
                 } else {
-                    hero(ctx, c, top, d, cfg, p, f, value, cfg.label(), caption, center)
+                    hero(c, top, d, cfg, p, f, value, cfg.label(), caption, center)
                 }
-                val chartTop = top.bottom + gap
-                val chartH = (r.bottom - chartTop) * 0.4f
+                val chartTop = top.bottom + gap * 1.5f
+                val chartH = (r.bottom - chartTop) * 0.36f
                 bars(c, RectF(r.left, chartTop, r.right, chartTop + chartH), p, report.today, report.now)
                 apps(ctx, c, RectF(r.left, chartTop + chartH + gap, r.right, r.bottom), d, cfg, p, f, report, header = false, maxRows = 3)
             }
             wDp >= 250 && hDp >= 100 && side.isNotEmpty() -> {
-                val split = r.left + r.width() * 0.54f
-                hero(ctx, c, RectF(r.left, r.top, split - gap / 2, r.bottom), d, cfg, p, f, value, cfg.label(), caption, center)
-                val right = RectF(split + gap / 2, r.top, r.right, r.bottom)
-                // One column of stat tiles.
-                val n = side.size
-                val th = (right.height() - (n - 1) * 6 * d) / n
-                side.forEachIndexed { i, m ->
-                    val y = right.top + i * (th + 6 * d)
-                    tiles(c, RectF(right.left, y, right.right, y + th), d, cfg, p, f, report, listOf(m))
-                }
+                val split = r.left + r.width() * 0.5f
+                hero(c, RectF(r.left, r.top, split - gap / 2, r.bottom), d, cfg, p, f, value, cfg.label(), caption, center)
+                tiles(c, RectF(split + gap / 2, r.top, r.right, r.bottom), d, cfg, p, f, report, side, forceCols = 1, minH = 36 * d)
             }
-            else -> hero(ctx, c, r, d, cfg, p, f, value, cfg.label(), caption, center)
+            else -> hero(c, r, d, cfg, p, f, value, cfg.label(), caption, center)
         }
     }
 

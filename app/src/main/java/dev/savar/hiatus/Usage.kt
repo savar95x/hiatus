@@ -274,7 +274,7 @@ object Fmt {
         return when (f) {
             DurationFormat.UNITS -> when {
                 d > 0 -> "${d}d ${h % 24}h"
-                h > 0 -> "${h}h ${m % 60}m"
+                h > 0 -> if (m % 60 == 0L) "${h}h" else "${h}h ${m % 60}m"
                 else -> "${m}m"
             }
             DurationFormat.LONG -> when {

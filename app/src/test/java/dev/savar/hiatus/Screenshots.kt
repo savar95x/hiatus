@@ -15,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Rule
 import org.junit.Test
@@ -138,7 +140,7 @@ class Screenshots {
 
     // ------------------------------------------------------------------ screens
 
-    private fun screen(name: String, dark: Boolean, black: Boolean = false, content: @Composable () -> Unit) {
+    private fun screen(name: String, dark: Boolean, black: Boolean = false, after: () -> Unit = {}, content: @Composable () -> Unit) {
         ThemePrefs.load(ctx)
         ThemePrefs.setMode(ctx, if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
         ThemePrefs.setPureBlack(ctx, black)
@@ -146,6 +148,8 @@ class Screenshots {
         compose.setContent { HiatusTheme { content() } }
         compose.mainClock.advanceTimeBy(1_500)
         Thread.sleep(400) // icons load on Dispatchers.IO
+        compose.mainClock.advanceTimeBy(1_500)
+        after()
         compose.mainClock.advanceTimeBy(1_500)
         save(compose.onRoot().captureToImage().asAndroidBitmap(), name)
     }
@@ -167,4 +171,22 @@ class Screenshots {
 
     @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
     @Test fun settings_dark() = screen("settings_dark", true) { AppSettingsScreen(true, {}, {}) }
+
+    @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
+    @Test fun editor_customise() {
+        val r = fakeReport()
+        screen("editor_customise", true, after = { compose.onNodeWithText("Customise").performClick() }) { WidgetEditor(-1, r) }
+    }
+
+    @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
+    @Test fun editor_content() {
+        val r = fakeReport()
+        screen("editor_content", false, after = {
+            compose.onNodeWithText("Customise").performClick()
+            compose.mainClock.advanceTimeBy(1_000)
+            compose.onNodeWithText("Content").performClick()
+        }) { WidgetEditor(-1, r) }
+    }
+
+    @Test fun editor_new() { val r = fakeReport(); screen("editor_new", true, black = true) { WidgetEditor(7, r, onDone = {}) } }
 }

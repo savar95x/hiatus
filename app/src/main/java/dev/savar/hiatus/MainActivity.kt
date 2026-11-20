@@ -292,6 +292,13 @@ private fun Root(launchId: Int) {
     var settings by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = settings) { settings = false }
 
+    if (launchId >= 0) {
+        // Opened by the launcher while adding a widget: just the editor, with Done.
+        val activity = ctx as? android.app.Activity
+        WidgetEditor(launchId, report, onDone = { activity?.finish() })
+        return
+    }
+
     AnimatedContent(
         targetState = settings,
         transitionSpec = {
