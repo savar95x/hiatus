@@ -80,6 +80,8 @@ class Screenshots {
     private fun looks() = listOf(
         "Default" to Style(),
         "Corner shape" to Style(shape = true),
+        "Nothing below the number" to Style(caption = Caption.NONE),
+        "Nothing below, centred, no label" to Style(caption = Caption.NONE, hAlign = HAlign.CENTER, showLabel = false),
         "Tinted, centred, share of day, shape" to Style(background = Background.TINTED, hAlign = HAlign.CENTER, caption = Caption.SHARE, shape = true),
         "Light, 2 hr 45 min, longest break" to Style(theme = ThemeMode.LIGHT, format = NumberFormat.WORDS, caption = Caption.LONGEST),
         "Clock, no label, 70%" to Style(format = NumberFormat.CLOCK, showLabel = false, numberScale = 70, shape = true),

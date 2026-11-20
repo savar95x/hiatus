@@ -14,7 +14,7 @@ import java.net.URLEncoder
 object Fonts {
 
     val system = listOf(
-        "sans-serif" to "Sans",
+        "sans-serif" to "System default",
         "sans-serif-condensed" to "Condensed",
         "serif" to "Serif",
         "monospace" to "Mono",
@@ -22,15 +22,10 @@ object Fonts {
         "casual" to "Casual",
     )
 
-    /** A curated set that look great as big numbers. Any Google Fonts family name works. */
-    // Fixed order, never reordered or replaced by recents. Google Sans Flex first: the Material 3 Expressive face.
+    /** Suggested first in the typeface list, in this order (the owner's picks). Any Google Fonts family works. */
     val googleSuggestions = listOf(
-        "Google Sans Flex", "Roboto Flex", "Space Grotesk", "Bebas Neue", "Fragment Mono", "Anton", "Outfit", "Unbounded", "Syne",
-        "Archivo Black", "Big Shoulders Display", "Michroma", "Orbitron", "Righteous",
-        "Bungee", "Monoton", "Rubik Mono One", "Major Mono Display", "JetBrains Mono",
-        "Space Mono", "DM Serif Display", "Instrument Serif", "Playfair Display",
-        "Fraunces", "Abril Fatface", "Poppins", "Inter", "Manrope", "Sora",
-        "Lexend", "Teko", "Oswald", "Fjalla One", "Pacifico", "Caveat",
+        "Google Sans", "Google Sans Flex", "Fragment Mono", "Space Grotesk", "Work Sans", "Inter",
+        "Outfit", "Manrope", "DM Serif Display", "Instrument Serif", "Bebas Neue", "JetBrains Mono",
     )
 
     private val memCache = java.util.concurrent.ConcurrentHashMap<String, Typeface>()
