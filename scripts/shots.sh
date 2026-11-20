@@ -13,7 +13,8 @@ for i in $(seq 1 120); do
   if [ "$status" = "completed" ]; then
     echo "Run $id: $conclusion"
     rm -rf out/shots && mkdir -p out/shots
-    gh run download "$id" -n "shots-$sha" -D out/shots >/dev/null 2>&1 || true
+    git fetch -q --depth 1 origin shots 2>/dev/null && git archive FETCH_HEAD | tar -x -C out/shots
+    [ "$(cat out/shots/SHA 2>/dev/null)" = "$sha" ] || echo "(shots branch is from another commit)"
     find out/shots -name '*.png' | sort | sed 's|^|  |'
     if [ "$conclusion" != "success" ]; then
       gh run view "$id" --log-failed 2>/dev/null | sed 's/^.*Z //' \

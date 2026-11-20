@@ -10,6 +10,9 @@ on:
       - "scripts/**"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   shots:
     runs-on: ubuntu-latest
@@ -28,10 +31,17 @@ jobs:
       - name: Render screenshots
         run: gradle :app:testDebugUnitTest --tests 'dev.savar.hiatus.Screenshots' --stacktrace
 
-      - uses: actions/upload-artifact@v4
+      # Artifacts aren't reachable from every review environment, git is: publish the PNGs as a single-commit
+      # orphan branch "shots" (force-pushed, so history doesn't pile up).
+      - name: Publish to shots branch
         if: always()
-        with:
-          name: shots-${{ github.sha }}
-          path: |
-            app/build/shots/*.png
-            app/build/reports/tests/
+        run: |
+          mkdir -p /tmp/shots && cp app/build/shots/*.png /tmp/shots/ 2>/dev/null || true
+          cd /tmp/shots
+          echo "${{ github.sha }}" > SHA
+          git init -q -b shots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" shots
