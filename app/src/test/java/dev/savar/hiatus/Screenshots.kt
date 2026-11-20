@@ -142,16 +142,21 @@ class Screenshots {
 
     // ------------------------------------------------------------------ screens
 
-    private fun screen(name: String, dark: Boolean, black: Boolean = false, after: () -> Unit = {}, content: @Composable () -> Unit) {
+    /** [frozen]: keep the clock still (needed for screens with endless animations; clicks then need manual advancing). */
+    private fun screen(
+        name: String, dark: Boolean, black: Boolean = false, frozen: Boolean = true,
+        after: () -> Unit = {}, content: @Composable () -> Unit,
+    ) {
         ThemePrefs.load(ctx)
         ThemePrefs.setMode(ctx, if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
         ThemePrefs.setPureBlack(ctx, black)
-        compose.mainClock.autoAdvance = false
+        compose.mainClock.autoAdvance = !frozen
         compose.setContent { HiatusTheme { content() } }
         compose.mainClock.advanceTimeBy(1_500)
         Thread.sleep(400) // icons load on Dispatchers.IO
         compose.mainClock.advanceTimeBy(1_500)
         after()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(1_500)
         save(compose.onRoot().captureToImage().asAndroidBitmap(), name)
     }
@@ -177,13 +182,13 @@ class Screenshots {
     @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
     @Test fun editor_customise() {
         val r = fakeReport()
-        screen("editor_customise", true, after = { compose.onNodeWithText("Customise").performClick() }) { WidgetEditor(-1, r) }
+        screen("editor_customise", true, frozen = false, after = { compose.onNodeWithText("Customise").performClick() }) { WidgetEditor(-1, r) }
     }
 
     @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
     @Test fun editor_content() {
         val r = fakeReport()
-        screen("editor_content", false, after = {
+        screen("editor_content", false, frozen = false, after = {
             compose.onNodeWithText("Customise").performClick()
             compose.mainClock.advanceTimeBy(1_000)
             compose.onAllNodesWithText("Content").onFirst().performClick()
