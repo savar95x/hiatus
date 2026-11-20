@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0] - 2026-11-20
+- New Away widget style, now the default: total time away today, a 24-pill timeline of the day (brighter where
+  you were away), share of the day, longest break, and a soft Material shape in the corner (or none).
+- Away today is the headline everywhere; "Last away" moved to More looks. The Today card shows the same timeline.
+- Tap the widget to open Hiatus, open an app, or refresh it ("None" is gone).
+- Pure black is always switchable in Settings, now reachable from the Widgets tab too.
+
 ## [0.4.0] - 2026-11-20
 - Away time leads: the editor opens on four away looks (Away, Cookie, Midnight, Away + day); screen-time looks
   sit under "More looks", and other stats under "More stats".
