@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.11.1] - 2026-11-20
+- Apps lists: lighter bars. They're now Material 3's own thin progress indicator, and each app's colour is a
+  soft tint of its icon's hue instead of a strong stripe.
+
 ## [0.11.0] - 2026-11-20
 - The widget is called Hiatus in the widget picker.
 - Every widget size has its own layout: 1 × 1 shows just the number (on two lines when that's bigger); 4 × 1
