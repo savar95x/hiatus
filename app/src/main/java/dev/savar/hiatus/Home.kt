@@ -105,6 +105,7 @@ fun HomeContent(data: HomeData?, rules: Rules, onWeek: (Int) -> Unit) {
                 .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            UpdateCard()
             Hero(day, rules, isToday)
             if (day.hasData) DayStrip(day)
             WeekCard(data, idx, onPick = { picked = it }, onWeek = { onWeek(it); picked = -1 })

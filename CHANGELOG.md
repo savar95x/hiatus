@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0] - 2026-11-20
+- Updates from inside the app: when a newer release is on GitHub, Home shows what's new with an Update button,
+  and Settings → About has Check for updates. Android asks once to let Hiatus install its updates; after the
+  first one, later updates install without a prompt on Android 12+.
+- No wasted downloads: GitHub is checked at most once an hour (an unchanged answer costs nothing), each update
+  is downloaded once, resumes if the connection drops, and is deleted after it's installed. On Wi-Fi it's
+  fetched ahead, so Install is instant.
+
 ## [0.8.0] - 2026-11-20
 - Widget: darker default background (still tinted by your wallpaper). Under the number it now shows the time
   span counted, like "7:12 AM – 4:25 PM" (from waking up when sleep is left out); share of day is still an option.

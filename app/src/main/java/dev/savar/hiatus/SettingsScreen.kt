@@ -28,9 +28,6 @@ fun SettingsScreen(granted: Boolean) {
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val rules = Prefs.rules
     var picking by remember { mutableStateOf<Boolean?>(null) } // true = bedtime, false = wake-up
-    val version = remember {
-        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
-    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection),
@@ -123,8 +120,9 @@ fun SettingsScreen(granted: Boolean) {
             }
 
             Group("About") {
+                item { UpdateSettingsRow() }
                 item {
-                    NavRow("Hiatus $version", "Releases and source on GitHub", Icons.Rounded.Code) {
+                    NavRow("Source and releases", "github.com/savar95x/hiatus", Icons.Rounded.Code) {
                         openUrl(ctx, "https://github.com/savar95x/hiatus/releases")
                     }
                 }
