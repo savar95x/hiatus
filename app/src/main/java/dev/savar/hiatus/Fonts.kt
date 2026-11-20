@@ -10,9 +10,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-object FontManager {
+/** Fonts for the widget: system families, any Google Fonts family (downloaded as TTF), or a file you pick. */
+object Fonts {
 
-    val systemFamilies = listOf(
+    val system = listOf(
         "sans-serif" to "Sans",
         "sans-serif-condensed" to "Condensed",
         "serif" to "Serif",
@@ -32,7 +33,7 @@ object FontManager {
         "Lexend", "Teko", "Oswald", "Fjalla One", "Pacifico", "Caveat",
     )
 
-    private val memCache = HashMap<String, Typeface>()
+    private val memCache = java.util.concurrent.ConcurrentHashMap<String, Typeface>()
 
     // ---------- recently used Google Fonts (newest first) ----------
 
@@ -80,16 +81,16 @@ object FontManager {
         }
     }
 
-    private fun system(family: String, weight: Int): Typeface =
+    private fun systemFace(family: String, weight: Int): Typeface =
         Typeface.create(Typeface.create(family, Typeface.NORMAL), weight.coerceIn(100, 900), false)
 
     fun typeface(ctx: Context, f: FontSpec): Typeface = when (f.source) {
-        FontSource.SYSTEM -> system(f.systemFamily, f.weight)
-        FontSource.GOOGLE -> fromFile(googleFile(ctx, f.googleFamily, f.weight))
-            ?: googleFileAnyWeight(ctx, f.googleFamily)?.let { fromFile(it) }
-            ?: system("sans-serif", f.weight)
-        FontSource.FILE -> (if (f.localFontFile.isNotEmpty()) fromFile(File(fontsDir(ctx), f.localFontFile)) else null)
-            ?: system("sans-serif", f.weight)
+        FontSource.SYSTEM -> systemFace(f.family, f.weight)
+        FontSource.GOOGLE -> fromFile(googleFile(ctx, f.family, f.weight))
+            ?: googleFileAnyWeight(ctx, f.family)?.let { fromFile(it) }
+            ?: systemFace("sans-serif", f.weight)
+        FontSource.FILE -> (if (f.family.isNotEmpty()) fromFile(File(fontsDir(ctx), f.family)) else null)
+            ?: systemFace("sans-serif", f.weight)
     }
 
 

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Widget picker preview: the default widget is wallpaper Surface, dark. -->
-    <color name="widget_bg">@android:color/system_neutral1_900</color>
-    <color name="widget_fg">@android:color/system_neutral1_100</color>
-    <color name="widget_fg2">@android:color/system_neutral2_200</color>
-    <color name="widget_accent">@android:color/system_accent1_200</color>
-</resources>

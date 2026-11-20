@@ -1,33 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Widget picker preview (Android 12+): the default look. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@android:id/background"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
+    android:background="@drawable/widget_preview_bg"
     android:orientation="vertical"
     android:padding="16dp">
 
     <TextView
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Away today"
-        android:textColor="@color/widget_fg2"
-        android:textSize="13sp" />
-
-    <TextView
-        android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fontFamily="sans-serif-medium"
-        android:gravity="center_vertical"
-        android:text="16h 40m"
-        android:textColor="@color/widget_accent"
-        android:textSize="40sp" />
+        android:text="@string/away_today"
+        android:textColor="@color/preview_text"
+        android:textSize="13sp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="78% of your day"
-        android:textColor="@color/widget_fg2"
-        android:textSize="13sp" />
+        android:fontFamily="sans-serif"
+        android:includeFontPadding="false"
+        android:text="5h 12m"
+        android:textColor="@color/preview_number"
+        android:textSize="38sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/preview_caption"
+        android:textColor="@color/preview_text"
+        android:textSize="12sp" />
 </LinearLayout>
