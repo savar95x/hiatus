@@ -1,6 +1,7 @@
 # Hiatus: handoff for AI agents
 
-Android home-screen screen-time widget (idea from Nothing's "Away Time", look is pure Material 3 Expressive) + Compose stats app. Kotlin, package `dev.savar.hiatus`,
+Android "time away from your phone" widget (idea from Nothing's "Away Time", look is pure Material 3) + an away-time analytics app.
+**Scope is deliberately tiny** (owner, 0.6.0): only away time. No screen time, app usage, presets or other widget styles; don't add them back. Kotlin, package `dev.savar.hiatus`,
 minSdk 29 · targetSdk 36 · compileSdk 37. Owner: Savar Verma (GitHub `savar95x`), daily driver **OnePlus 13s,
 OxygenOS 16**. Sibling projects with the same conventions: `savar95x/minutia`, `savar95x/aria-player`.
 
@@ -29,14 +30,13 @@ Work on a branch, look at the shots, then merge to main to release. Fake apps/us
 ## Architecture (`app/src/main/java/dev/savar/hiatus`)
 | File | What it does |
 |---|---|
-| `Usage.kt` | One pass over `UsageStatsManager.queryEvents` → `Timeline` (in-use sessions, unlocks, screen wakes, per-app foreground intervals). `day()` clips it into `DayStats`; `lastAway()` = latest gap ≥ the "shortest break" setting. Session = KEYGUARD_HIDDEN → screen off / KEYGUARD_SHOWN (screen-on intervals if the device never reports unlocks). Screen time = union of app RESUMED→PAUSED/STOPPED, launcher + systemui excluded. `Fmt` (duration formats), `Metrics` (value + caption per `Metric`). |
-| `WidgetConfig.kt` | Per-widget settings as JSON in prefs `widget_configs` (`w_<id>`, new widgets inherit `last`), enums (`WidgetStyle`, `Metric`, `ColorRole`, `ShapeKind`, …), `FontSpec`, `AppPrefs` (shortest break). New setting = field + toJson/fromJson + editor row. |
-| `WidgetRenderer.kt` | Whole widget as one bitmap. Styles AWAY (default: away today, 24 hourly pills from `Usage.hourlyAway`, corner shape) / HERO / RING / SHAPE / TILES / CHART / APPS / DASHBOARD built from pieces (`hero`, `drawRing`, `tiles`, `bars`, `apps`). Palettes from `android.R.color.system_<accent/neutral>_<shade>` per `ColorRole`, or custom colours. Units drawn smaller (`rich`). |
-| `Presets.kt` | `away` looks (all "away today") lead in the editor, `more` (screen time) behind "More looks"; away time *today* is the app's point (owner: "Last away" is secondary). Applying one keeps the user's font and tap action. |
-| `HiatusWidget.kt` | Provider (`goAsync` + single-thread executor), `Widgets.refresh/size` (requests coalesced; `fresh = false` reuses stats from `Widgets.remember`/the last run for up to 90 s, so settings edits redraw instantly before OxygenOS freezes the app; the app also redraws on ON_STOP), tap intents, `Refresher` (inexact 15-min alarm), `HiatusApp` + `ScreenListener` (redraw on SCREEN_ON / USER_PRESENT / dark-mode change while the process lives). |
-| `MainActivity.kt` | Activity (also the widget configure activity) and root: NavigationBar Today / Widgets, Settings page. |
-| `TodayScreen.kt` | Dashboard: hero, week bars, per-app donut, stats group, hourly chart, top apps. |
-| `WidgetEditor.kt` | Pinned live preview, widget chips, Looks (presets), then Customise → Style / Content / Font / Colours / Layout, and On tap. `onDone` = launched by the launcher's configure step (focused "New widget" screen). `sampleReport()` feeds previews before usage access. |
-| `AppSettings.kt` | Theme, pure black, shortest break, usage access, battery, source link. |
-| `Theme.kt` | `HiatusTheme` (`MaterialExpressiveTheme`, dynamic colour, `ThemePrefs`; dark = `deepDark()` near black as the owner asked, `pureBlack()` = #000). |
+| `Usage.kt` | One pass over `UsageStatsManager.queryEvents` → `Timeline` (unlocked sessions, unlocks). `day()` → `DayStats` over "counted" time (the day so far minus the sleep window if excluded): away, share, breaks (gaps ≥ shortest break), unlocks, first unlock. `lastAway()`. `Fmt` (durations, share text, clock). |
+| `WidgetConfig.kt` | The one widget's look as JSON in prefs `widget` (`w_<id>`, new widgets inherit `last`). Defaults: Surface palette, dark, system corners. `AppPrefs`: shortest break, exclude sleep, bedtime/wake. |
+| `WidgetRenderer.kt` | Draws the widget into a bitmap: label, big number (smaller units), "x% of your day". Palettes from `android.R.color.system_*` per `ColorRole` or custom colours; `cornerDp` = `system_app_widget_background_radius` unless set by hand. |
+| `HiatusWidget.kt` | Provider (`goAsync` + single-thread executor), `Widgets.refresh/size` (coalesced; `fresh = false` reuses stats for 90 s so edits redraw before OxygenOS freezes the app; the app also redraws on ON_STOP), tap intents (Hiatus / app / refresh), `Refresher` (inexact 15-min alarm), `HiatusApp` + `ScreenListener`. |
+| `MainActivity.kt` | Activity (also the widget configure activity, titled "Hiatus") and tabs: Hiatus (analytics) / Widget / Settings. |
+| `AnalyticsScreen.kt` | Home: hero (away + share), week bars (tap a day), Breaks, Check-ins. |
+| `WidgetEditor.kt` | Pinned live preview, then Text / Font / Colours / Layout / On tap, Reset. `sampleReport()` feeds previews before usage access. |
+| `AppSettings.kt` | Theme, pure black (`pure_black_v2`, off by default), sleep window, shortest break, access, about. |
+| `Theme.kt` | `HiatusTheme` (`MaterialExpressiveTheme`, dynamic colour, `ThemePrefs`, `pureBlack()`). Normal Material colours by default. |
 | `Components.kt`, `FontManager.kt`, `FontBrowser.kt` | Copied from Minutia: grouped rows, switches, sliders, colour picker, app picker, font editor, Google Fonts. Keep in step with Minutia when either changes. |

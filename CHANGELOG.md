@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0] - 2026-11-20
+- Hiatus is now just about time away from your phone. Screen time, app usage, presets and the other widget
+  styles are gone.
+- Home is an analytics page: away today with share of your day, the week's away time (tap a day), breaks
+  (longest, average, count, last) and check-ins (unlocks, how often, first unlock).
+- Settings has its own tab. New: leave out sleep, so your bedtime to wake-up hours don't count as away.
+- One widget: "Away today", the number, and share of your day. Default is the wallpaper's dark surface colour
+  with the same corner roundness as your phone's other widgets. Text, font, colours, background, layout and tap
+  action are all still customisable. Existing widgets start fresh on the new default.
+- The app's theme is back to normal Material colours by default; pure black is an option in Settings.
+
 ## [0.5.0] - 2026-11-20
 - New Away widget style, now the default: total time away today, a 24-pill timeline of the day (brighter where
   you were away), share of the day, longest break, and a soft Material shape in the corner (or none).
