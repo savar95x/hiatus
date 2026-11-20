@@ -79,11 +79,11 @@ class Screenshots {
 
     private fun looks() = listOf(
         "Default" to Style(),
-        "Hiatus icon in the corner" to Style(icon = IconKind.MARK),
-        "Moon behind, primary, centred" to Style(icon = IconKind.MOON, iconPlace = IconPlace.BEHIND, background = Background.PRIMARY, hAlign = HAlign.CENTER, vAlign = VAlign.CENTER),
+        "Corner shape" to Style(shape = true),
+        "Tinted, centred, share of day, shape" to Style(background = Background.TINTED, hAlign = HAlign.CENTER, caption = Caption.SHARE, shape = true),
         "Light, 2 hr 45 min, longest break" to Style(theme = ThemeMode.LIGHT, format = NumberFormat.WORDS, caption = Caption.LONGEST),
-        "Clock format, no label, bottom, end" to Style(format = NumberFormat.CLOCK, showLabel = false, hAlign = HAlign.END, vAlign = VAlign.BOTTOM, icon = IconKind.PAUSE),
-        "No background" to Style(background = Background.NONE, icon = IconKind.MARK),
+        "Clock, no label, 70%" to Style(format = NumberFormat.CLOCK, showLabel = false, numberScale = 70, shape = true),
+        "Clear" to Style(background = Background.NONE, shape = true),
     )
 
     @Test fun widget_dark() = sheet("widget_dark", looks(), dark = true)
@@ -107,13 +107,13 @@ class Screenshots {
     @Test fun home_dark() { val r = Rules(); val d = home(r); screen("home_dark", true) { HomeContent(d, r) {} } }
     @Test fun home_light() { val r = Rules(); val d = home(r); screen("home_light", false) { HomeContent(d, r) {} } }
 
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "w411dp-h3000dp-xxhdpi")
     @Test fun home_full_black() {
         val r = Rules(sleep = SleepMode.AUTO); val d = home(r)
         screen("home_full_black", true, black = true) { HomeContent(d, r) {} }
     }
 
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "w411dp-h3000dp-xxhdpi")
     @Test fun home_full_light_fixed_sleep() {
         val r = Rules(sleep = SleepMode.FIXED, bed = 60, wake = 8 * 60, minBreakMs = 5 * 60_000L); val d = home(r)
         screen("home_full_light", false) { HomeContent(d, r) {} }

@@ -1,7 +1,9 @@
 # Hiatus: handoff for AI agents
 
 Android "time away from your phone" widget (idea from Nothing's "Away Time", look is pure Material 3) + an away-time analytics app.
-**Scope is deliberately tiny** (owner, 0.6.0; rebuilt 0.7.0): only away time. No screen time, app usage, presets or other widget styles; don't add them back. Kotlin, package `dev.savar.hiatus`,
+**Scope is deliberately tiny** (owner, 0.6.0; rebuilt 0.7.0): away time first. The only extra (owner, 0.8.0) is
+an Apps section on Home (most used, and "pulls you back" = first app after unlocking). No screen-time totals,
+presets or other widget styles. The widget editor was deliberately trimmed in 0.8.0: keep it short, keep fonts. Kotlin, package `dev.savar.hiatus`,
 minSdk 29 · targetSdk 36 · compileSdk 37. Owner: Savar Verma (GitHub `savar95x`), daily driver **OnePlus 13s,
 OxygenOS 16**. Sibling projects with the same conventions: `savar95x/minutia`, `savar95x/aria-player`.
 
@@ -30,13 +32,14 @@ branch `shots`; `scripts/shots.sh` waits and extracts them to `out/shots/`. Work
 ## Architecture (`app/src/main/java/dev/savar/hiatus`), rebuilt from scratch in 0.7.0
 | File | What it does |
 |---|---|
-| `Away.kt` | The maths. `live()` = one pass over usage events → `Timeline` (in-use spans from unlock to lock/screen-off; screen-on if the phone never reports unlocks). `timeline()` = live + `History`. `day()` → `Day` over counted time (day so far minus sleep): breaks ≥ shortest break, away = sum of breaks, share, unlocks. Sleep: `Rules` OFF / AUTO (longest 3 h+ gap reaching into 00–08) / FIXED. `week()`, `today()`. |
+| `Away.kt` | The maths. `live()` = one pass over usage events → `Timeline` (in-use spans from unlock to lock/screen-off; screen-on if the phone never reports unlocks; foreground app spans from ACTIVITY_RESUMED/PAUSED minus launchers; first app after each unlock). `timeline()` = live + `History`. `day()` → `Day` over counted time (day so far minus sleep): breaks ≥ shortest break, away = sum of breaks, share, unlocks. Sleep: `Rules` OFF / AUTO (longest 3 h+ gap reaching into 00–08) / FIXED. `week()`, `today()`. |
 | `History.kt` | One small text file per finished day (unlocks + in-use spans, last 6 days only, kept 120 days), so past weeks outlive Android's ~week of events. |
 | `Prefs.kt` | Observable app settings: `Rules`, theme, pure black. `setRules` refreshes widgets. |
-| `Style.kt` | The widget's whole look (one `Style` for all instances), JSON in prefs `style`/`v2`. |
-| `Render.kt` | `Renderer.render()` draws the widget bitmap; used by the widget **and** the editor preview. Palettes from Material You roles (`system_*` by name, tonal shades before Android 14). Drops caption, then label, when the number gets too small. Icons drawn on a 24-unit grid. |
-| `Widget.kt` | Provider, `Widgets.refresh` (coalesced, single thread, reuses today's numbers for 2 min on look edits), `ScreenWatch` (unlock → redraw; screen-off → arm a non-waking alarm delivered on next wake), `Alarms` (half-hourly inexact + midnight, all non-waking), tap intents. Root layout `widget` uses `@android:id/background` so the launcher rounds it like its own widgets; custom corners use `widget_free`. |
-| `Home.kt` | Home: hero, day strip, week (arrows through history), breaks, check-ins, `AccessGate`. `HomeContent` is pure (screenshots). |
+| `Style.kt` | The widget's whole look (one `Style` for all instances), JSON in prefs `style`/`v2`; `parse` keeps fonts/label/tap of 0.7.0 styles. |
+| `Render.kt` | `Renderer.render()` draws the widget bitmap; used by the widget **and** the editor preview. Palettes from Material You roles (`system_*` by name, tonal shades before Android 14); dark surface = container mixed 50% to black. Label top, number + caption bottom; drops caption, then label, when small. Optional faint scalloped shape off the top-right corner. Caption default = time span (`Fmt.window`). |
+| `Theme.kt` `Sem` | Fixed meaning colours for analytics: away green, in use coral, sleep indigo (light/dark). |
+| `Widget.kt` | Provider, `Widgets.refresh` (coalesced, single thread, reuses today's numbers for 2 min on look edits), `ScreenWatch` (unlock → redraw; screen-off → arm a non-waking alarm delivered on next wake), `Alarms` (half-hourly inexact + midnight, all non-waking), tap intents. Root layout `widget` uses `@android:id/background` so the launcher rounds it like its own widgets;  |
+| `Home.kt` | Home: hero, day strip, week (arrows through history), breaks, check-ins, apps (live days only; not in `History`), `AccessGate`. `HomeContent` is pure (screenshots). |
 | `Editor.kt` | Widget editor: pinned preview + size chips, every option, `FontSheet`. Saves and pushes each change. |
 | `SettingsScreen.kt`, `MainActivity.kt`, `Theme.kt`, `Ui.kt`, `Fonts.kt`, `Format.kt`, `Sample.kt` | Settings tab; activity + bottom nav (also the widget's configure screen); theme; shared rows/groups/pickers; Google Fonts download (TTF via plain user agents); formatting; sample data. |
 

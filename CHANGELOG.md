@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0] - 2026-11-20
+- Widget: darker default background (still tinted by your wallpaper). Under the number it now shows the time
+  span counted, like "7:12 AM – 4:25 PM" (from waking up when sleep is left out); share of day is still an option.
+- Widget: the corner icon is now an abstract shape, a soft scalloped form sitting off the top-right corner, faint
+  and purely decorative.
+- Widget editor trimmed to what matters: label, what's under the number, number format, fonts (system, Google
+  or a file), theme, background (surface, tinted, clear), alignment, number size, corner shape, tap action.
+  Your fonts, label and tap action carry over.
+- Home has colours with meaning: away is green, phone in use is coral, sleep is indigo, across the hero, the
+  day strip, the week, breaks and check-ins.
+- New Apps section: most used apps (time and opens), and "Pulls you back", the apps you open first after
+  unlocking.
+- The font picker's tabs read System, Google and File.
+
 ## [0.7.0] - 2026-11-20
 - Rebuilt from scratch: new code throughout, same app (installs over 0.6.0). Widget looks start fresh on the new
   default; re-place the widget if it looks stuck.

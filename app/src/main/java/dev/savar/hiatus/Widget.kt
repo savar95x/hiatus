@@ -242,12 +242,10 @@ object Widgets {
     private fun draw(ctx: Context, m: AppWidgetManager, id: Int, style: Style, day: Day?, rules: Rules) {
         val sz = size(ctx, id)
         val bmp = Renderer.render(ctx, style, sz.w, sz.h, sz.d, day, rules)
-        // With the phone's own corners the root is @android:id/background, so the launcher clips and animates it
-        // like its other widgets. Custom corners use a plain root, or the launcher would round it its own way.
-        val layout = if (style.corners < 0) R.layout.widget else R.layout.widget_free
-        val rv = RemoteViews(ctx.packageName, layout)
+        // The root is @android:id/background, so the launcher clips and animates it like its other widgets.
+        val rv = RemoteViews(ctx.packageName, R.layout.widget)
         rv.setImageViewBitmap(R.id.img, bmp)
-        rv.setContentDescription(R.id.img, Renderer.description(day, rules))
+        rv.setContentDescription(R.id.img, Renderer.description(ctx, day))
         rv.setOnClickPendingIntent(R.id.img, tap(ctx, style, id, day == null))
         m.updateAppWidget(id, rv)
     }

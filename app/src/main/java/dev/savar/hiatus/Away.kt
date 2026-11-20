@@ -15,6 +15,8 @@ data class Span(val start: Long, val end: Long) {
     fun clip(a: Long, b: Long): Span? = Span(max(start, a), min(end, b)).takeIf { it.end > it.start }
 }
 
+private fun AppSpan.clip(a: Long, b: Long): Long = (min(end, b) - max(start, a)).coerceAtLeast(0)
+
 /**
  * When the phone was in use (unlocked) between [from] and [now]. Away = everything else.
  * Glancing at the lock screen doesn't count as use: only unlocking does.
@@ -25,7 +27,15 @@ class Timeline(
     val use: List<Span>,       // sorted, non-overlapping
     val unlocks: LongArray,    // sorted
     val inUseNow: Boolean,
+    val apps: List<AppSpan> = emptyList(),          // an app in the foreground (launcher left out)
+    val firstApps: List<Pair<Long, String>> = emptyList(), // (unlock time, first app opened after it)
 )
+
+/** [pkg] in the foreground for [start]..[end]. */
+class AppSpan(val pkg: String, val start: Long, val end: Long)
+
+/** One app over a day: time in the foreground, times opened, times it was the first app after an unlock. */
+class AppStat(val pkg: String, val ms: Long, val opens: Int, val firsts: Int)
 
 /** One day, measured over "counted" time: the day so far, minus sleep when sleep is left out. */
 class Day(
@@ -39,7 +49,12 @@ class Day(
     val unlocks: LongArray,    // unlocks within counted time
     val ongoing: Boolean,      // the last break is still going (today, phone locked right now)
     val hasData: Boolean,      // false for future days and days with no record at all
+    val apps: List<AppStat> = emptyList(), // most used first; only for days Android still has events for
 ) {
+    /** When the day's count started: midnight, or waking up when sleep is left out (a late night before it aside). */
+    val countFrom: Long? get() = sleep.firstOrNull { it.start < start + 12 * HOUR }?.end?.takeIf { it < until }
+        ?: counted.firstOrNull()?.start
+
     val countedMs: Long = counted.sumOf { it.ms }
     val awayMs: Long = breaks.sumOf { it.ms }
     /** Share of counted time spent away, 0..1. */
@@ -147,7 +162,23 @@ object Away {
         val screen = ArrayList<Span>()
         val use = ArrayList<Span>()
         val unlocks = ArrayList<Long>()
-        fun lock(t: Long) { if (unlocked >= 0 && t > unlocked) use.add(Span(unlocked, t)); unlocked = -1 }
+        val ignore = launchers(ctx)
+        val apps = ArrayList<AppSpan>()
+        val firstApps = ArrayList<Pair<Long, String>>()
+        var fg: String? = null
+        var fgStart = -1L
+        var awaitingFirst = -1L // unlock time still waiting for its first app
+        fun closeApp(t: Long) {
+            val p = fg ?: return
+            if (t > fgStart) apps.add(AppSpan(p, fgStart, t))
+            fg = null
+        }
+        fun lock(t: Long) {
+            if (unlocked >= 0 && t > unlocked) use.add(Span(unlocked, t))
+            unlocked = -1
+            closeApp(t)
+            awaitingFirst = -1
+        }
         while (events.hasNextEvent()) {
             events.getNextEvent(ev)
             val t = ev.timeStamp
@@ -160,15 +191,41 @@ object Away {
                 }
                 UsageEvents.Event.KEYGUARD_HIDDEN -> {
                     sawUnlock = true
-                    if (unlocked < 0) { unlocked = t; unlocks.add(t) }
+                    if (unlocked < 0) { unlocked = t; unlocks.add(t); awaitingFirst = t }
                 }
                 UsageEvents.Event.KEYGUARD_SHOWN -> lock(t)
+                UsageEvents.Event.ACTIVITY_RESUMED -> {
+                    val p = ev.packageName ?: continue
+                    if (p == fg) continue
+                    closeApp(t)
+                    if (p in ignore) continue
+                    // Moving between screens of one app: keep it one stretch.
+                    val last = apps.lastOrNull()
+                    if (last != null && last.pkg == p && t - last.end < 2_000) {
+                        apps.removeAt(apps.lastIndex); fgStart = last.start
+                    } else fgStart = t
+                    fg = p
+                    if (awaitingFirst >= 0) { firstApps.add(awaitingFirst to p); awaitingFirst = -1 }
+                }
+                UsageEvents.Event.ACTIVITY_PAUSED -> if (ev.packageName == fg) closeApp(t)
             }
         }
         val inUse = if (sawUnlock) unlocked >= 0 else screenOn >= 0
         lock(now)
         if (screenOn >= 0) screen.add(Span(screenOn, now))
-        return Timeline(from, now, merge(if (sawUnlock) use else screen), unlocks.toLongArray(), inUse)
+        return Timeline(from, now, merge(if (sawUnlock) use else screen), unlocks.toLongArray(), inUse, apps, firstApps)
+    }
+
+    /** Home screens and the system UI: not "apps you used". */
+    private fun launchers(ctx: Context): Set<String> {
+        val out = hashSetOf("android", "com.android.systemui", ctx.packageName)
+        runCatching {
+            @Suppress("DEPRECATION")
+            ctx.packageManager.queryIntentActivities(
+                android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME), 0,
+            ).forEach { out += it.activityInfo.packageName }
+        }
+        return out
     }
 
     internal fun merge(spans: List<Span>): List<Span> {
@@ -201,7 +258,7 @@ object Away {
             d = next
         }
         unlocks.sort()
-        return Timeline(from, now, merge(use), unlocks.toLongArray(), live.inUseNow)
+        return Timeline(from, now, merge(use), unlocks.toLongArray(), live.inUseNow, live.apps, live.firstApps)
     }
 
     // ------------------------------------------------------------------ days
@@ -265,7 +322,24 @@ object Away {
         val breaks = counted.flatMap { w -> gaps(use, w.start, w.end) }.filter { it.ms >= rules.minBreakMs }
         val unlocks = dayUnlocks.filter { t -> counted.any { t >= it.start && t < it.end } }.toLongArray()
         val ongoing = until == now && !tl.inUseNow && breaks.lastOrNull()?.end == until
-        return Day(d, end, until, counted, sleep, use, if (hasData) breaks else emptyList(), unlocks, ongoing, hasData)
+        return Day(d, end, until, counted, sleep, use, if (hasData) breaks else emptyList(), unlocks, ongoing, hasData, apps(tl, d, until))
+    }
+
+    private fun apps(tl: Timeline, a: Long, b: Long): List<AppStat> {
+        if (tl.apps.isEmpty()) return emptyList()
+        val ms = HashMap<String, Long>()
+        val opens = HashMap<String, Int>()
+        for (s in tl.apps) {
+            val c = s.clip(a, b)
+            if (c <= 0) continue
+            ms[s.pkg] = (ms[s.pkg] ?: 0L) + c
+            if (s.start >= a) opens[s.pkg] = (opens[s.pkg] ?: 0) + 1
+        }
+        val firsts = HashMap<String, Int>()
+        for ((t, p) in tl.firstApps) if (t in a until b) firsts[p] = (firsts[p] ?: 0) + 1
+        return (ms.keys + firsts.keys).map { AppStat(it, ms[it] ?: 0L, opens[it] ?: 0, firsts[it] ?: 0) }
+            .filter { it.ms >= 1_000 || it.firsts > 0 }
+            .sortedByDescending { it.ms }
     }
 
     /** The 7 days of a week (offset 0 = this week), and today. */

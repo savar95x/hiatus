@@ -66,3 +66,27 @@ fun HiatusTheme(content: @Composable () -> Unit) {
     }
     MaterialExpressiveTheme(colorScheme = scheme, motionScheme = MotionScheme.expressive(), content = content)
 }
+
+/**
+ * Fixed meaning colours for the analytics, the same in every wallpaper so a chart reads at a glance:
+ * away is green, phone in use is coral (Hiatus's accent), sleep is indigo.
+ */
+class Sem(
+    val away: Color, val awayContainer: Color, val onAwayContainer: Color,
+    val use: Color, val useContainer: Color, val onUseContainer: Color,
+    val sleep: Color,
+)
+
+private val DarkSem = Sem(
+    away = Color(0xFF7DD8A6), awayContainer = Color(0xFF16382A), onAwayContainer = Color(0xFFBDF2D2),
+    use = Color(0xFFF0A383), useContainer = Color(0xFF47281D), onUseContainer = Color(0xFFFFDBCD),
+    sleep = Color(0xFFA8B2FF),
+)
+private val LightSem = Sem(
+    away = Color(0xFF1F7A4D), awayContainer = Color(0xFFC6EFD5), onAwayContainer = Color(0xFF00391F),
+    use = Color(0xFFB4532F), useContainer = Color(0xFFFFDBCD), onUseContainer = Color(0xFF3A0B00),
+    sleep = Color(0xFF4B5BC6),
+)
+
+@Composable
+internal fun sem(): Sem = if (isAppDark()) DarkSem else LightSem
