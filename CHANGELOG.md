@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-11-20
+- Away time leads: the editor opens on four away looks (Away, Cookie, Midnight, Away + day); screen-time looks
+  sit under "More looks", and other stats under "More stats".
+- Today's top card also shows away time so far and the longest break.
+- Darker dark mode, close to OxygenOS's own apps, for the app and the widgets. Pure black still goes to #000.
+- Widgets update right after you change a setting, even if you leave the app straight away.
+- Tapping the widget: Hiatus, an app, or nothing (Refresh removed; the widget keeps itself current).
+
 ## [0.3.0] - 2026-11-20
 - Widgets: start from eight ready-made looks (Away, Goal ring, Cookie, Glance, Day, Top apps, Overview,
   Midnight). Every option is still there under Customise.
