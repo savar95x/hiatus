@@ -27,7 +27,7 @@ object Fmt {
             NumberFormat.HM -> when {
                 h == 0L -> listOf("$m" to false, "m" to true)
                 r == 0L -> listOf("$h" to false, "h" to true)
-                else -> listOf("$h" to false, "h " to true, "$r" to false, "m" to true)
+                else -> listOf("$h" to false, "h" to true, " " to false, "$r" to false, "m" to true)
             }
             NumberFormat.WORDS -> when {
                 h == 0L -> listOf("$m" to false, " min" to true)

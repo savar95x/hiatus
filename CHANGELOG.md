@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0] - 2026-11-20
+- Rebuilt from scratch: new code throughout, same app (installs over 0.6.0). Widget looks start fresh on the new
+  default; re-place the widget if it looks stuck.
+- New icon: a ring with a gap and a coral dot, in the same colours and line weight as Aria and Minutia.
+- Home: away today with a wavy share-of-day bar, the day as a strip (away, in use, sleep), the week's bars with
+  arrows back to earlier weeks (finished days are now kept on the phone, so history outlasts Android's week of
+  events), breaks (longest, average, count, last, and how the away time splits by break length) and check-ins
+  (unlocks, how often, first and last unlock, unlocks by hour).
+- Away now only counts breaks at least the shortest break long, so the breaks add up to the total.
+- Leave out sleep: Off, Auto (each night's longest break is taken as sleep, no setup) or Set hours (with presets
+  like 3 – 8 AM).
+- Widget: resizes down to 1 × 1 (caption, then label make way for the number), optional faint icon (Hiatus mark,
+  moon or pause; in the corner or behind), number formats including minutes and hours only, separate number and
+  text fonts, vertical layout (spread, top, centre, bottom), number and text size, padding, corners.
+- Widget refreshes when you unlock, at midnight and when you change something; no waking alarms.
+
 ## [0.6.0] - 2026-11-20
 - Hiatus is now just about time away from your phone. Screen time, app usage, presets and the other widget
   styles are gone.

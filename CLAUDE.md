@@ -1,7 +1,7 @@
 # Hiatus: handoff for AI agents
 
 Android "time away from your phone" widget (idea from Nothing's "Away Time", look is pure Material 3) + an away-time analytics app.
-**Scope is deliberately tiny** (owner, 0.6.0): only away time. No screen time, app usage, presets or other widget styles; don't add them back. Kotlin, package `dev.savar.hiatus`,
+**Scope is deliberately tiny** (owner, 0.6.0; rebuilt 0.7.0): only away time. No screen time, app usage, presets or other widget styles; don't add them back. Kotlin, package `dev.savar.hiatus`,
 minSdk 29 · targetSdk 36 · compileSdk 37. Owner: Savar Verma (GitHub `savar95x`), daily driver **OnePlus 13s,
 OxygenOS 16**. Sibling projects with the same conventions: `savar95x/minutia`, `savar95x/aria-player`.
 
@@ -22,21 +22,23 @@ material3 keeps the Expressive APIs internal. In that version `RoundedPolygon.to
 The owner asked for it to look native to Android, not like a Nothing widget, and to be as customisable as Minutia.
 
 ## Seeing your work (screenshots)
-`app/src/test/.../Screenshots.kt` renders every widget style × size × light/dark, all presets, and the main screens to
-PNG with Robolectric native graphics. Workflow `screenshots.yml` runs it on every **non-main** branch push (Java 21)
-and force-pushes the PNGs to the orphan branch `shots`; `scripts/shots.sh` waits and extracts them to `out/shots/`.
-Work on a branch, look at the shots, then merge to main to release. Fake apps/usage come from `fakeReport()`.
+`app/src/test/.../Screenshots.kt` renders the widget (looks × sizes 1×1…4×2, dark/light wallpaper) and every screen
+to PNG with Robolectric native graphics, using `Sample` data (a synthetic week run through the real `Away` maths).
+Workflow `screenshots.yml` runs it on every **non-main** branch push and force-pushes the PNGs to the orphan
+branch `shots`; `scripts/shots.sh` waits and extracts them to `out/shots/`. Work on a branch, look, then merge to main.
 
-## Architecture (`app/src/main/java/dev/savar/hiatus`)
+## Architecture (`app/src/main/java/dev/savar/hiatus`), rebuilt from scratch in 0.7.0
 | File | What it does |
 |---|---|
-| `Usage.kt` | One pass over `UsageStatsManager.queryEvents` → `Timeline` (unlocked sessions, unlocks). `day()` → `DayStats` over "counted" time (the day so far minus the sleep window if excluded): away, share, breaks (gaps ≥ shortest break), unlocks, first unlock. `lastAway()`. `Fmt` (durations, share text, clock). |
-| `WidgetConfig.kt` | The one widget's look as JSON in prefs `widget` (`w_<id>`, new widgets inherit `last`). Defaults: Surface palette, dark, system corners. `AppPrefs`: shortest break, exclude sleep, bedtime/wake. |
-| `WidgetRenderer.kt` | Draws the widget into a bitmap: label, big number (smaller units), "x% of your day". Palettes from `android.R.color.system_*` per `ColorRole` or custom colours; `cornerDp` = `system_app_widget_background_radius` unless set by hand. |
-| `HiatusWidget.kt` | Provider (`goAsync` + single-thread executor), `Widgets.refresh/size` (coalesced; `fresh = false` reuses stats for 90 s so edits redraw before OxygenOS freezes the app; the app also redraws on ON_STOP), tap intents (Hiatus / app / refresh), `Refresher` (inexact 15-min alarm), `HiatusApp` + `ScreenListener`. |
-| `MainActivity.kt` | Activity (also the widget configure activity, titled "Hiatus") and tabs: Hiatus (analytics) / Widget / Settings. |
-| `AnalyticsScreen.kt` | Home: hero (away + share), week bars (tap a day), Breaks, Check-ins. |
-| `WidgetEditor.kt` | Pinned live preview, then Text / Font / Colours / Layout / On tap, Reset. `sampleReport()` feeds previews before usage access. |
-| `AppSettings.kt` | Theme, pure black (`pure_black_v2`, off by default), sleep window, shortest break, access, about. |
-| `Theme.kt` | `HiatusTheme` (`MaterialExpressiveTheme`, dynamic colour, `ThemePrefs`, `pureBlack()`). Normal Material colours by default. |
-| `Components.kt`, `FontManager.kt`, `FontBrowser.kt` | Copied from Minutia: grouped rows, switches, sliders, colour picker, app picker, font editor, Google Fonts. Keep in step with Minutia when either changes. |
+| `Away.kt` | The maths. `live()` = one pass over usage events → `Timeline` (in-use spans from unlock to lock/screen-off; screen-on if the phone never reports unlocks). `timeline()` = live + `History`. `day()` → `Day` over counted time (day so far minus sleep): breaks ≥ shortest break, away = sum of breaks, share, unlocks. Sleep: `Rules` OFF / AUTO (longest 3 h+ gap reaching into 00–08) / FIXED. `week()`, `today()`. |
+| `History.kt` | One small text file per finished day (unlocks + in-use spans, last 6 days only, kept 120 days), so past weeks outlive Android's ~week of events. |
+| `Prefs.kt` | Observable app settings: `Rules`, theme, pure black. `setRules` refreshes widgets. |
+| `Style.kt` | The widget's whole look (one `Style` for all instances), JSON in prefs `style`/`v2`. |
+| `Render.kt` | `Renderer.render()` draws the widget bitmap; used by the widget **and** the editor preview. Palettes from Material You roles (`system_*` by name, tonal shades before Android 14). Drops caption, then label, when the number gets too small. Icons drawn on a 24-unit grid. |
+| `Widget.kt` | Provider, `Widgets.refresh` (coalesced, single thread, reuses today's numbers for 2 min on look edits), `ScreenWatch` (unlock → redraw; screen-off → arm a non-waking alarm delivered on next wake), `Alarms` (half-hourly inexact + midnight, all non-waking), tap intents. Root layout `widget` uses `@android:id/background` so the launcher rounds it like its own widgets; custom corners use `widget_free`. |
+| `Home.kt` | Home: hero, day strip, week (arrows through history), breaks, check-ins, `AccessGate`. `HomeContent` is pure (screenshots). |
+| `Editor.kt` | Widget editor: pinned preview + size chips, every option, `FontSheet`. Saves and pushes each change. |
+| `SettingsScreen.kt`, `MainActivity.kt`, `Theme.kt`, `Ui.kt`, `Fonts.kt`, `Format.kt`, `Sample.kt` | Settings tab; activity + bottom nav (also the widget's configure screen); theme; shared rows/groups/pickers; Google Fonts download (TTF via plain user agents); formatting; sample data. |
+
+Icon: `res/drawable/ic_launcher_*.xml`, a ring (r 18, stroke 8.2, gap top-right) with a coral dot in the gap;
+colours shared with Aria and Minutia (#1C1C1E, #EEE7DC, #E2957A).

@@ -166,6 +166,7 @@ object Renderer {
         val iconCorner = s.icon != IconKind.NONE && s.iconPlace == IconPlace.CORNER
         val iconSize = (labelP.textSize * 1.35f).coerceIn(13f * d, 30f * d)
 
+        val iconRoom = iconSize + 4f * d // with no label, the corner icon gets the top line to itself
         var label = if (s.showLabel && s.label.isNotBlank()) s.label else null
         var caption = captionText(s, day, rules)
         val gapLabel = labelP.textSize * 0.45f
@@ -174,6 +175,7 @@ object Renderer {
         fun lineH(p: Paint) = p.fontMetrics.let { it.descent - it.ascent }
         fun fitted(): Float {
             var avail = innerH
+            if (label == null && iconCorner) avail -= iconRoom
             if (label != null) avail -= lineH(labelP) + gapLabel
             if (caption != null) avail -= lineH(capP) + gapCap
             val byH = avail / cap100 * 100f
@@ -196,14 +198,16 @@ object Renderer {
         val blockH = labelH + (if (label != null) gapLabel else 0f) + numH + (if (caption != null) gapCap + capH else 0f)
         val labelTop: Float
         val numTop: Float
+        val layT = if (label == null && iconCorner) innerT + iconRoom else innerT
+        val layH = innerB - layT
         when (if (s.vAlign == VAlign.SPREAD && label == null) VAlign.BOTTOM else s.vAlign) {
             VAlign.SPREAD -> {
-                labelTop = innerT
+                labelTop = layT
                 numTop = innerB - (if (caption != null) capH + gapCap else 0f) - numH
             }
-            VAlign.TOP -> { labelTop = innerT; numTop = innerT + labelH + (if (label != null) gapLabel else 0f) }
+            VAlign.TOP -> { labelTop = layT; numTop = layT + labelH + (if (label != null) gapLabel else 0f) }
             VAlign.CENTER -> {
-                labelTop = innerT + (innerH - blockH) / 2f
+                labelTop = layT + (layH - blockH) / 2f
                 numTop = labelTop + labelH + (if (label != null) gapLabel else 0f)
             }
             VAlign.BOTTOM -> {
