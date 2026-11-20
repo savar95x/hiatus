@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Rule
 import org.junit.Test
@@ -93,12 +95,14 @@ class Screenshots {
 
     // ------------------------------------------------------------------ screens
 
-    private fun screen(name: String, dark: Boolean, black: Boolean = false, content: @Composable () -> Unit) {
+    private fun screen(name: String, dark: Boolean, black: Boolean = false, after: () -> Unit = {}, content: @Composable () -> Unit) {
         Prefs.init(ctx)
         Prefs.setTheme(ctx, if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
         Prefs.setPureBlack(ctx, black)
         compose.mainClock.autoAdvance = false
         compose.setContent { HiatusTheme { content() } }
+        repeat(4) { compose.mainClock.advanceTimeBy(800); Thread.sleep(150) }
+        after()
         repeat(4) { compose.mainClock.advanceTimeBy(800); Thread.sleep(150) }
         save(compose.onRoot().captureToImage().asAndroidBitmap(), name)
     }
@@ -133,6 +137,18 @@ class Screenshots {
 
     @Config(qualifiers = "w411dp-h2600dp-xxhdpi")
     @Test fun editor() { val r = Rules(); val day = Sample.today(r, now); screen("editor", true) { WidgetEditor(day, r) } }
+
+    @Config(qualifiers = "w411dp-h2200dp-xxhdpi")
+    @Test fun editor_fonts() {
+        val r = Rules(); val day = Sample.today(r, now)
+        screen("editor_fonts", true, after = { compose.onNodeWithText("Fonts").performClick() }) { WidgetEditor(day, r) }
+    }
+
+    @Config(qualifiers = "w411dp-h1800dp-xxhdpi")
+    @Test fun editor_text() {
+        val r = Rules(); val day = Sample.today(r, now)
+        screen("editor_text", false, after = { compose.onNodeWithText("Text").performClick() }) { WidgetEditor(day, r) }
+    }
 
     @Config(qualifiers = "w411dp-h1800dp-xxhdpi")
     @Test fun settings() = screen("settings", true) { SettingsScreen(true) }

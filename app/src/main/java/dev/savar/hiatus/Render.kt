@@ -179,15 +179,30 @@ object Renderer {
             return dh * lines.size + dh * lineGap * (lines.size - 1)
         }
         fun lineH(p: Paint) = p.fontMetrics.let { it.descent - it.ascent }
-        /** Shrinks [p] (to 75% at most) until [t] fits [maxW], then ellipsizes what's left over. */
-        fun fitText(t: String, p: TextPaint, maxW: Float): String {
-            val full = p.measureText(t)
-            if (full > maxW) p.textSize *= max(0.75f, maxW / full)
-            return TextUtils.ellipsize(t, p, maxW, TextUtils.TruncateAt.END).toString()
+        /**
+         * The first of [options] that fits [maxW] (shrinking [p] to 85% at most), else the last one shrunk to 75% and
+         * ellipsized. Longer wordings go first.
+         */
+        val base = HashMap<Paint, Float>()
+        fun fitText(options: List<String>, p: TextPaint, maxW: Float): String {
+            val size0 = base.getOrPut(p) { p.textSize }
+            for ((i, t) in options.withIndex()) {
+                p.textSize = size0
+                val full = p.measureText(t)
+                val last = i == options.lastIndex
+                if (full <= maxW) return t
+                if (full * 0.85f <= maxW || last) {
+                    p.textSize = size0 * max(if (last) 0.75f else 0.85f, maxW / full)
+                    return TextUtils.ellipsize(t, p, maxW, TextUtils.TruncateAt.END).toString()
+                }
+            }
+            return ""
         }
+        fun fitText(t: String, p: TextPaint, maxW: Float) = fitText(listOf(t), p, maxW)
 
         val label = if (s.showLabel && s.label.isNotBlank()) s.label else null
         val caption = captionText(ctx, s, day, rules)
+        val captions = if (caption != null && s.caption == Caption.WINDOW && day != null) listOf(caption) + Fmt.windowShort(ctx, day) else listOfNotNull(caption)
 
         when {
             // 1 × 1: only the number.
@@ -203,7 +218,7 @@ object Renderer {
             hd < 120 && wd >= 250 -> {
                 val sideW = innerW * 0.42f
                 val lt = label?.let { fitText(it, labelP, sideW) }
-                val ct = caption?.let { fitText(it, capP, sideW) }
+                val ct = if (caption != null) fitText(captions, capP, sideW) else null
                 val size = fit(innerW - sideW - 12f * d, innerH, false) * s.numberScale.coerceIn(40, 100) / 100f
                 val nh = digitH * size
                 drawNumber(left, top + (innerH - nh) / 2f, size, false)
@@ -214,7 +229,8 @@ object Renderer {
             }
             else -> {
                 val big = wd >= 250 && hd >= 150
-                val tall = hd > wd * 1.25f
+                // Two-line number on tall widgets, and on square ones when it's clearly bigger.
+                val tall = hd > wd * 0.9f
                 val iconSize = (labelP.textSize * 1.25f).coerceIn(12f * d, 22f * d)
                 val gapL = labelP.textSize * 0.5f
                 val gapC = capP.textSize * 0.4f
@@ -229,7 +245,7 @@ object Renderer {
                     val boxH = innerH - topRow() - bottomRows()
                     val one = fit(innerW, boxH, false)
                     val t = if (tall) fit(innerW, boxH, true) else 0f
-                    two = t > one * 1.15f
+                    two = t > one * (if (hd > wd * 1.25f) 1.15f else 1.3f)
                     return max(one, t)
                 }
                 var size = best()
@@ -254,7 +270,7 @@ object Renderer {
                     y -= stripH + stripGap
                 }
                 ct?.let {
-                    val t = fitText(it, capP, innerW)
+                    val t = fitText(captions, capP, innerW)
                     y -= lineH(capP)
                     c.drawText(t, left, y - capP.fontMetrics.ascent, capP)
                     y -= gapC

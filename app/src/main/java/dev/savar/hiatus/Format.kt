@@ -64,6 +64,15 @@ object Fmt {
         return "From " + (if (from == day.start) "midnight" else time(ctx, from)) + " to " + to
     }
 
+    /** The same, shorter, for narrow widgets: "Midnight to 9:40 PM", then "12 AM – 9:40 PM". */
+    fun windowShort(ctx: Context, day: Day): List<String> {
+        val from = day.countFrom ?: day.start
+        val to = if (day.until >= day.end) "midnight" else time(ctx, day.until)
+        val f = if (from == day.start) "Midnight" else time(ctx, from)
+        val compact = (if (from == day.start) time(ctx, from) else f).replace(":00", "") + " – " + to
+        return listOf("$f to $to", compact)
+    }
+
     fun shareText(day: Day, rules: Rules): String =
         "${day.percent}% of your " + if (rules.sleep != SleepMode.OFF) "waking day" else "day"
 

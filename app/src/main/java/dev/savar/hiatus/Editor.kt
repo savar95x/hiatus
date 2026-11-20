@@ -212,7 +212,7 @@ private fun MainList(style: Style, day: Day, rules: Rules, fontTick: Int, size: 
 private fun textSummary(s: Style) = listOfNotNull(
     if (s.showLabel) s.label.ifBlank { null } else null,
     s.format.title,
-    if (s.caption == Caption.NONE) null else s.caption.title.replace("…", "").replace("  ", " ").trim(),
+    when (s.caption) { Caption.NONE -> null; Caption.WINDOW -> "Time span"; else -> s.caption.title },
 ).joinToString(" · ")
 
 private fun fontsSummary(s: Style): String {
