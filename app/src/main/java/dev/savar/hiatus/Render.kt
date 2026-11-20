@@ -54,8 +54,8 @@ object Renderer {
         return when (s.background) {
             Background.SURFACE -> {
                 val container = c("surface_container", "neutral1", 900, 50, 0xFF1F1F23.toInt(), 0xFFF1EFF4.toInt())
-                // Dark: about halfway from the container tone to black, still tinted by the wallpaper.
-                val bg = if (dark) mix(container, Color.BLACK, 0.5f) else container
+                // Dark: a quarter of the way from the container tone to black, still tinted by the wallpaper.
+                val bg = if (dark) mix(container, Color.BLACK, 0.25f) else container
                 Palette(bg, onSurface, onVariant, primary)
             }
             Background.TINTED -> {
@@ -122,7 +122,7 @@ object Renderer {
         val shadow = s.background == Background.NONE
         val minSide = min(w, h).toFloat()
 
-        if (s.shape) drawShape(c, w.toFloat(), minSide, pal.accent, if (s.background == Background.NONE) 0.07f else 0.10f)
+        if (s.shape) drawShape(c, w.toFloat(), minSide, pal.accent, if (s.background == Background.NONE) 0.06f else 0.08f)
 
         val k = (minSide / (150f * d)).coerceIn(0.8f, 1.25f)     // text grows a little with the widget
         val pad = min(16f * d, minSide * 0.13f)
@@ -166,7 +166,13 @@ object Renderer {
             c.drawText(t, x(labelP.measureText(t)), top - labelP.fontMetrics.ascent, labelP)
         }
         val capH = if (caption != null) lineH(capP) + gapC else 0f
-        val baseline = bottom - capH
+        val numH = cap100 * size / 100f
+        // With a caption, number + caption sit at the bottom. Without one, the number is centred in the space
+        // under the label (or in the whole widget when there's no label either), so it doesn't look stranded.
+        val baseline = if (caption != null) bottom - capH else {
+            val areaTop = if (label != null) top + lineH(labelP) + gapL else top
+            areaTop + (bottom - areaTop + numH) / 2f
+        }
         var nx = x(numW)
         for ((t, unit) in pieces) {
             val p = if (unit) unitP else numP
@@ -194,9 +200,9 @@ object Renderer {
      * mostly outside the widget and very faint.
      */
     private fun drawShape(c: Canvas, w: Float, minSide: Float, color: Int, strength: Float) {
-        val radius = minSide * 0.42f
-        val cx = w - radius * 0.28f
-        val cy = radius * 0.22f
+        val radius = minSide * 0.22f
+        val cx = w - radius * 0.2f
+        val cy = radius * 0.2f
         val path = Path()
         val steps = 180
         for (i in 0..steps) {

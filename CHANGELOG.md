@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0] - 2026-11-20
+- Widget background is lighter again: between 0.7's surface and 0.8's near-black.
+- The corner shape is much smaller and fainter, tucked into the corner.
+- With nothing below the number, the number now sits centred in the space under the label instead of hugging
+  the bottom.
+- Widget tab: titled "Widget", and the preview scrolls with the page instead of staying pinned. The size
+  buttons are gone; the preview uses your widget's real size (2 × 2 until one is placed).
+- Fonts work like Aria's: a font page with a live preview, the typeface, and weight on a slider; the typeface
+  list has search and style filters pinned on top, with System default, From a file (opens the file picker
+  straight away), Suggested (Google Sans, Google Sans Flex, Fragment Mono, Space Grotesk, Work Sans, Inter and a
+  few more; no Roboto) and then every Google Font, each shown in its own face.
+
 ## [0.9.0] - 2026-11-20
 - Updates from inside the app: when a newer release is on GitHub, Home shows what's new with an Update button,
   and Settings → About has Check for updates. Android asks once to let Hiatus install its updates; after the
