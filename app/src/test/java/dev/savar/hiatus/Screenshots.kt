@@ -119,6 +119,15 @@ class Screenshots {
         screen("home_full_light", false) { HomeContent(d, r) {} }
     }
 
+    @Test fun update_card() {
+        val r = Rules(); val d = home(r)
+        Updates.showForPreview(Updates.State.Available(Release("0.9.0",
+            "- Update Hiatus from inside the app.\n- Checks GitHub at most once an hour.\n- Downloads once, resumes if cut off.",
+            "", 2_900_000L)))
+        screen("update_card", true) { HomeContent(d, r) {} }
+        Updates.showForPreview(Updates.State.Idle)
+    }
+
     @Test fun access() = screen("access", false) { AccessGate() }
 
     @Config(qualifiers = "w411dp-h2600dp-xxhdpi")

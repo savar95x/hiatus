@@ -67,6 +67,7 @@ fun App(tab: Tab, onTab: (Tab) -> Unit) {
         if (now != granted) Widgets.refresh(ctx) // the widget was showing "Tap to set up"
         granted = now
         tick++
+        Updates.check(ctx) // at most once an hour; a newer release shows on Home
         onPauseOrDispose { }
     }
     val rules = Prefs.rules
