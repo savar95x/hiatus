@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="icon_bg">#FF141416</color>
-    <color name="widget_bg">#FF1B1B1F</color>
-    <color name="widget_fg">#FFE4E2E6</color>
-    <color name="widget_fg2">#FFC6C5D0</color>
-    <color name="widget_accent">#FFB8C4FF</color>
+    <!-- Launcher icon: same palette as Aria and Minutia. -->
+    <color name="icon_bg">#FF1C1C1E</color>
+    <color name="preview_bg">#FF1F1F23</color>
+    <color name="preview_number">#FFE4E2E6</color>
+    <color name="preview_text">#FFC6C5D0</color>
 </resources>
