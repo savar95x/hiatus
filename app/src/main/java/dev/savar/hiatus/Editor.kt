@@ -49,6 +49,7 @@ fun WidgetEditor(day: Day?, rules: Rules) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var style by remember { mutableStateOf(Style.load(ctx)) }
+    val sysDark = isSystemInDarkTheme()
     var fontTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(style) {
         Style.save(ctx, style)
@@ -119,7 +120,7 @@ fun WidgetEditor(day: Day?, rules: Rules) {
                 if (style.background != Background.NONE) item {
                     SliderRow("Opacity", style.bgAlpha, 0..100, "${style.bgAlpha}%", step = 5) { set(style.copy(bgAlpha = it)) }
                 }
-                val pal = Renderer.palette(ctx, style.copy(numberColor = null, textColor = null, iconColor = null), isSystemInDarkTheme())
+                val pal = Renderer.palette(ctx, style.copy(numberColor = null, textColor = null, iconColor = null), sysDark)
                 item { ColorChooser("Number colour", style.numberColor, auto = pal.number) { set(style.copy(numberColor = it)) } }
                 item { ColorChooser("Text colour", style.textColor, auto = pal.text) { set(style.copy(textColor = it)) } }
             }
@@ -138,7 +139,7 @@ fun WidgetEditor(day: Day?, rules: Rules) {
                         }
                     }
                     item { SliderRow("Strength", style.iconAlpha, 5..80, "${style.iconAlpha}%", step = 5) { set(style.copy(iconAlpha = it)) } }
-                    val pal = Renderer.palette(ctx, style.copy(iconColor = null), isSystemInDarkTheme())
+                    val pal = Renderer.palette(ctx, style.copy(iconColor = null), sysDark)
                     item { ColorChooser("Icon colour", style.iconColor, auto = pal.accent) { set(style.copy(iconColor = it)) } }
                 }
             }
