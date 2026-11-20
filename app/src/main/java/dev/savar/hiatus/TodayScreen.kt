@@ -537,7 +537,7 @@ private fun StatRow(icon: ImageVector, title: String, value: String, supporting:
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StatsGroup(d: DayStats, isToday: Boolean) {
-    Group(if (isToday) "Today" else "That day") {
+    Group("Details") {
         item { StatRow(Icons.Rounded.SelfImprovement, if (isToday) "Away so far" else "Away", Fmt.dur(d.awayMs)) }
         item { StatRow(Icons.Rounded.Spa, "Longest break", Fmt.dur(d.longestAwayMs)) }
         item { StatRow(Icons.Rounded.LockOpen, "Unlocks", d.unlocks.toString()) }

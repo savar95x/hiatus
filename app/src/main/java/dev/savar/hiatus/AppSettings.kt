@@ -290,7 +290,7 @@ fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: (
                 }
                 item {
                     SwitchRow(
-                        "Pure black", ThemePrefs.pureBlack && dark, enabled = dark, icon = Icons.Rounded.Contrast,
+                        "Pure black", ThemePrefs.pureBlack && dark, enabled = dark,
                         summary = if (dark) "Black background for AMOLED screens" else "Available in dark theme",
                     ) { ThemePrefs.setPureBlack(ctx, it) }
                 }
@@ -316,7 +316,7 @@ fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: (
                         modifier = Modifier.clickable { openUsageAccess(ctx) },
                         leadingContent = {
                             RowIcon(
-                                Icons.Rounded.DataUsage,
+                                Icons.Rounded.QueryStats,
                                 container = if (granted) scheme.primaryContainer else scheme.errorContainer,
                                 tint = if (granted) scheme.onPrimaryContainer else scheme.onErrorContainer,
                             )
