@@ -53,6 +53,15 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { test ->
+                test.maxHeapSize = "4g"
+                test.systemProperty("shots.dir", layout.buildDirectory.dir("shots").get().asFile.absolutePath)
+            }
+        }
+    }
     lint {
         checkReleaseBuilds = false
         abortOnError = false
@@ -73,4 +82,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Screenshot tests (Robolectric, native graphics): render widgets and screens to PNG in CI.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -1,0 +1,37 @@
+name: Screenshots
+
+# Renders every widget style and the main screens to PNG (Robolectric, native graphics) so changes can be
+# reviewed without a phone. Runs on branches other than main; download the "shots-<sha>" artifact.
+on:
+  push:
+    branches-ignore: [main]
+    paths-ignore:
+      - "**.md"
+      - "scripts/**"
+  workflow_dispatch:
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: current
+
+      - name: Render screenshots
+        run: gradle :app:testDebugUnitTest --tests 'dev.savar.hiatus.Screenshots' --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots-${{ github.sha }}
+          path: |
+            app/build/shots/*.png
+            app/build/reports/tests/

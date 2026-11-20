@@ -85,9 +85,15 @@ object ScreenListener {
                 if (night == lastNight) return
                 lastNight = night
             }
-            Widgets.refresh(ctx)
+            // Screen-on and unlock arrive a second or so apart: one redraw, after the unlock settles.
+            pending?.let { handler.removeCallbacks(it) }
+            val r = Runnable { pending = null; Widgets.refresh(ctx) }
+            pending = r
+            handler.postDelayed(r, if (intent.action == Intent.ACTION_SCREEN_ON) 1_500L else 300L)
         }
     }
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pending: Runnable? = null
 
     fun register(ctx: Context) {
         if (registered) return
