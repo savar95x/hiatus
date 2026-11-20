@@ -122,7 +122,7 @@ object Renderer {
         val shadow = s.background == Background.NONE
         val minSide = min(w, h).toFloat()
 
-        if (s.shape) drawShape(c, w.toFloat(), minSide, pal.accent)
+        if (s.shape) drawShape(c, w.toFloat(), minSide, pal.accent, if (s.background == Background.NONE) 0.07f else 0.10f)
 
         val k = (minSide / (150f * d)).coerceIn(0.8f, 1.25f)     // text grows a little with the widget
         val pad = min(16f * d, minSide * 0.13f)
@@ -191,9 +191,9 @@ object Renderer {
 
     /**
      * Purely decorative: a soft scalloped shape (like Material's "cookie") sitting off the top-right corner,
-     * mostly outside the widget and very faint, with a small dot drifting below it.
+     * mostly outside the widget and very faint.
      */
-    private fun drawShape(c: Canvas, w: Float, minSide: Float, color: Int) {
+    private fun drawShape(c: Canvas, w: Float, minSide: Float, color: Int, strength: Float) {
         val radius = minSide * 0.42f
         val cx = w - radius * 0.28f
         val cy = radius * 0.22f
@@ -207,8 +207,6 @@ object Renderer {
             if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
         }
         path.close()
-        c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = withAlpha(color, 0.10f) })
-        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = withAlpha(color, 0.24f) }
-        c.drawCircle(cx - radius * 1.14f, cy + radius * 1.0f, max(2f, minSide * 0.022f), dot)
+        c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = withAlpha(color, strength) })
     }
 }

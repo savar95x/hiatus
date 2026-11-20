@@ -7,10 +7,12 @@ leaves the phone.
 **Away** = the phone not unlocked. Glancing at the lock screen doesn't count as use.
 
 **Home**: away today and its share of your day, the day as a strip, this week (tap a day, go back a week),
-breaks (longest, average, count, last, by length) and check-ins (unlocks, how often, first and last, by hour).
+breaks (longest, average, count, last, by length), check-ins (unlocks, how often, first and last, by hour)
+and apps (most used, and the ones that pull you back after unlocking).
 
-**Widget**: "Away today", the big number, down to 1 × 1. Customise label, caption, number format, fonts
-(system, Google Fonts or a file), colours, background, a faint icon, size, alignment, corners and what a tap does.
+**Widget**: "Away today", the big number and the time span counted, down to 1 × 1. Pick the label, what's
+under the number, number format, fonts (system, Google Fonts or a file), theme, background, alignment, size, a
+faint corner shape and what a tap does.
 
 **Settings**: theme (Auto / Light / Dark), pure black, shortest break, leave out sleep (off, automatic or set
 hours).

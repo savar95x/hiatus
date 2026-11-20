@@ -107,13 +107,13 @@ class Screenshots {
     @Test fun home_dark() { val r = Rules(); val d = home(r); screen("home_dark", true) { HomeContent(d, r) {} } }
     @Test fun home_light() { val r = Rules(); val d = home(r); screen("home_light", false) { HomeContent(d, r) {} } }
 
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "w411dp-h3000dp-xxhdpi")
     @Test fun home_full_black() {
         val r = Rules(sleep = SleepMode.AUTO); val d = home(r)
         screen("home_full_black", true, black = true) { HomeContent(d, r) {} }
     }
 
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "w411dp-h3000dp-xxhdpi")
     @Test fun home_full_light_fixed_sleep() {
         val r = Rules(sleep = SleepMode.FIXED, bed = 60, wake = 8 * 60, minBreakMs = 5 * 60_000L); val d = home(r)
         screen("home_full_light", false) { HomeContent(d, r) {} }
