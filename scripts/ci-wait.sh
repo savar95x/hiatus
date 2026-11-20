@@ -8,7 +8,7 @@ sha=$(git rev-parse HEAD)
 echo "Waiting for CI on ${sha:0:7}…"
 id=""
 for i in $(seq 1 90); do
-  row=$(gh run list --commit "$sha" --limit 1 --json databaseId,status,conclusion \
+  row=$(gh run list --workflow build.yml --commit "$sha" --limit 1 --json databaseId,status,conclusion \
         --jq '.[0] | "\(.databaseId) \(.status) \(.conclusion)"' 2>/dev/null)
   if [ -z "$row" ] || [ "$row" = "null null null" ]; then
     if [ "$i" -ge 6 ] && [ -z "$id" ]; then echo "No run found for this commit (docs-only push?)"; exit 0; fi
