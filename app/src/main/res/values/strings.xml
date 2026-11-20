@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hiatus</string>
-    <string name="widget_name">Away today</string>
-    <string name="widget_desc">How long you\'ve been away from your phone today.</string>
+    <string name="widget_name">Hiatus</string>
+    <string name="widget_desc">Your time off the phone today</string>
     <string name="away_today">Away today</string>
-    <string name="preview_caption">7:12 AM – 4:25 PM</string>
+    <string name="preview_caption">From 7:12 AM to 4:25 PM</string>
 </resources>

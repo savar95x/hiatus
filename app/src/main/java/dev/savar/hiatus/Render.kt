@@ -103,9 +103,22 @@ object Renderer {
 
     // ------------------------------------------------------------------ drawing
 
+    /** The number as (text, isUnit) pieces split over two lines ("19h" / "35m"), or null if it can't split. */
+    private fun twoLines(p: List<Pair<String, Boolean>>): Pair<List<Pair<String, Boolean>>, List<Pair<String, Boolean>>>? {
+        val i = p.indexOfFirst { it.second }
+        if (i < 0 || i == p.lastIndex) return null
+        val a = p.subList(0, i + 1).map { it.first.trim() to it.second }
+        val b = p.subList(i + 1, p.size).filter { it.first.isNotBlank() }.mapIndexed { j, x -> (if (j == 0) x.first.trimStart() else x.first) to x.second }
+        return if (b.isEmpty()) null else a to b
+    }
+
     /**
      * Draws the widget at [w]×[h] px ([d] px per dp). [day] null = usage access not granted yet.
-     * Label on top, number and caption at the bottom. What doesn't fit goes: first the caption, then the label.
+     * The layout follows the size, so every size looks deliberate:
+     * - 1 × 1: just the number, centred, on two lines when that makes it bigger.
+     * - wide and short (4 × 1): the number on the left, label and caption stacked on the right.
+     * - everything else: label on top (with the clock, if on), number and caption at the bottom; tall widgets
+     *   split the number over two lines; big ones (4 × 2 and up) add a hairline strip of the day.
      */
     fun render(
         ctx: Context, s: Style, w: Int, h: Int, d: Float, day: Day?, rules: Rules,
@@ -120,68 +133,152 @@ object Renderer {
         c.clipPath(clip)
         if (Color.alpha(pal.bg) > 0) c.drawColor(pal.bg)
         val shadow = s.background == Background.NONE
+        val wd = w / d
+        val hd = h / d
         val minSide = min(w, h).toFloat()
+        val k = (minSide / (150f * d)).coerceIn(0.85f, 1.2f)
+        val pad = min(16f * d, minSide * 0.14f)
+        val left = pad; val top = pad; val right = w - pad; val bottom = h - pad
+        val innerW = right - left; val innerH = bottom - top
 
-        if (s.shape) drawShape(c, w.toFloat(), minSide, pal.accent, if (s.background == Background.NONE) 0.06f else 0.08f)
-
-        val k = (minSide / (150f * d)).coerceIn(0.8f, 1.25f)     // text grows a little with the widget
-        val pad = min(16f * d, minSide * 0.13f)
-        val numP = paint(Fonts.typeface(ctx, s.numberFont), 100f, pal.number, shadow).apply { letterSpacing = -0.02f }
-        val unitP = paint(Fonts.typeface(ctx, s.numberFont), 50f, pal.number, shadow)
-        val labelP = paint(Fonts.typeface(ctx, s.textFont), 13.5f * d * k, pal.text, shadow)
-        val capP = paint(Fonts.typeface(ctx, s.textFont), 12.5f * d * k, pal.text, shadow)
-
+        val numFace = Fonts.typeface(ctx, s.numberFont)
+        val numP = paint(numFace, 100f, pal.number, shadow).apply { letterSpacing = -0.02f }
+        val unitP = paint(numFace, 50f, pal.number, shadow)
+        val labelP = paint(Fonts.typeface(ctx, s.labelFont), 13.5f * d * k * s.labelScale / 100f, pal.text, shadow)
+        val capP = paint(Fonts.typeface(ctx, s.captionFont), 12.5f * d * k * s.captionScale / 100f, pal.text, shadow)
         val pieces = if (day == null) listOf("–" to false) else Fmt.parts(day.awayMs, s.format)
-        fun numWidth() = pieces.sumOf { (t, unit) -> (if (unit) unitP else numP).measureText(t).toDouble() }.toFloat()
-        val w100 = max(1f, numWidth())
-        val b = Rect(); numP.getTextBounds("0", 0, 1, b)
-        val cap100 = max(1, b.height()).toFloat()                 // digit height at size 100
+        val split = twoLines(pieces)
 
-        val left = pad; val top = pad; val bottom = h - pad
-        val innerW = w - 2 * pad; val innerH = bottom - top
+        fun width(ps: List<Pair<String, Boolean>>, size: Float): Float {
+            numP.textSize = size; unitP.textSize = size * 0.5f
+            return ps.sumOf { (t, u) -> (if (u) unitP else numP).measureText(t).toDouble() }.toFloat()
+        }
+        val digitH = Rect().also { numP.textSize = 100f; numP.getTextBounds("0", 0, 1, it) }.height().coerceAtLeast(1) / 100f
+        val lineGap = 0.2f // between the two number lines, in digit heights
+
+        /** Biggest number size for a box, one line or two. */
+        fun fit(boxW: Float, boxH: Float, two: Boolean): Float {
+            if (boxW <= 0 || boxH <= 0) return 0f
+            return if (!two || split == null) min(boxW / max(1f, width(pieces, 100f)) * 100f, boxH / digitH)
+            else min(boxW / max(1f, max(width(split.first, 100f), width(split.second, 100f))) * 100f, boxH / (digitH * (2 + lineGap)))
+        }
+        fun drawPieces(ps: List<Pair<String, Boolean>>, x0: Float, baseline: Float, size: Float) {
+            numP.textSize = size; unitP.textSize = size * 0.5f
+            var x = x0
+            for ((t, u) in ps) { val p = if (u) unitP else numP; c.drawText(t, x, baseline, p); x += p.measureText(t) }
+        }
+        /** Draws the number with its top-left at (x, y); returns its height. */
+        fun drawNumber(x: Float, y: Float, size: Float, two: Boolean, alignRight: Boolean = false, boxW: Float = 0f, centre: Boolean = false): Float {
+            val lines = if (two && split != null) listOf(split.first, split.second) else listOf(pieces)
+            val dh = digitH * size
+            lines.forEachIndexed { i, ps ->
+                val lw = width(ps, size)
+                val lx = when { centre -> x + (boxW - lw) / 2f; alignRight -> x + boxW - lw; else -> x }
+                drawPieces(ps, lx, y + dh + i * dh * (1 + lineGap), size)
+            }
+            return dh * lines.size + dh * lineGap * (lines.size - 1)
+        }
         fun lineH(p: Paint) = p.fontMetrics.let { it.descent - it.ascent }
+        /**
+         * The first of [options] that fits [maxW] (shrinking [p] to 85% at most), else the last one shrunk to 75% and
+         * ellipsized. Longer wordings go first.
+         */
+        val base = HashMap<Paint, Float>()
+        fun fitText(options: List<String>, p: TextPaint, maxW: Float): String {
+            val size0 = base.getOrPut(p) { p.textSize }
+            for ((i, t) in options.withIndex()) {
+                p.textSize = size0
+                val full = p.measureText(t)
+                val last = i == options.lastIndex
+                if (full <= maxW) return t
+                if (full * 0.87f <= maxW || last) {
+                    // A hair under the exact ratio: text width doesn't scale perfectly linearly.
+                    p.textSize = size0 * max(if (last) 0.75f else 0.85f, maxW / full * 0.98f)
+                    return TextUtils.ellipsize(t, p, maxW, TextUtils.TruncateAt.END).toString()
+                }
+            }
+            return ""
+        }
+        fun fitText(t: String, p: TextPaint, maxW: Float) = fitText(listOf(t), p, maxW)
 
-        var label = if (s.showLabel && s.label.isNotBlank()) s.label else null
-        var caption = captionText(ctx, s, day, rules)
-        val gapL = labelP.textSize * 0.5f
-        val gapC = capP.textSize * 0.45f
-        fun fit(): Float {
-            var avail = innerH
-            if (label != null) avail -= lineH(labelP) + gapL
-            if (caption != null) avail -= lineH(capP) + gapC
-            return max(0f, min(avail / cap100 * 100f, innerW / w100 * 100f))
-        }
-        var size = fit()
-        // Small widgets: room for the number first. Drop the caption, then the label.
-        if (caption != null && size < labelP.textSize * 2.1f) { caption = null; size = fit() }
-        if (label != null && size < labelP.textSize * 1.7f) { label = null; size = fit() }
-        size *= s.numberScale.coerceIn(40, 100) / 100f
-        numP.textSize = size
-        unitP.textSize = size * 0.5f
-        val numW = numWidth()
+        val label = if (s.showLabel && s.label.isNotBlank()) s.label else null
+        val caption = captionText(ctx, s, day, rules)
+        val captions = if (caption != null && s.caption == Caption.WINDOW && day != null) listOf(caption) + Fmt.windowShort(ctx, day) else listOfNotNull(caption)
 
-        fun x(lineW: Float) = if (s.hAlign == HAlign.CENTER) left + (innerW - lineW) / 2f else left
-        label?.let {
-            val t = TextUtils.ellipsize(it, labelP, innerW, TextUtils.TruncateAt.END).toString()
-            c.drawText(t, x(labelP.measureText(t)), top - labelP.fontMetrics.ascent, labelP)
-        }
-        val capH = if (caption != null) lineH(capP) + gapC else 0f
-        val numH = cap100 * size / 100f
-        // With a caption, number + caption sit at the bottom. Without one, the number is centred in the space
-        // under the label (or in the whole widget when there's no label either), so it doesn't look stranded.
-        val baseline = if (caption != null) bottom - capH else {
-            val areaTop = if (label != null) top + lineH(labelP) + gapL else top
-            areaTop + (bottom - areaTop + numH) / 2f
-        }
-        var nx = x(numW)
-        for ((t, unit) in pieces) {
-            val p = if (unit) unitP else numP
-            c.drawText(t, nx, baseline, p)
-            nx += p.measureText(t)
-        }
-        caption?.let {
-            val t = TextUtils.ellipsize(it, capP, innerW, TextUtils.TruncateAt.END).toString()
-            c.drawText(t, x(capP.measureText(t)), baseline + gapC - capP.fontMetrics.ascent, capP)
+        when {
+            // 1 × 1: only the number.
+            wd < 120 && hd < 120 -> {
+                val one = fit(innerW, innerH, false)
+                val two = fit(innerW, innerH, true)
+                val useTwo = two > one * 1.15f
+                val size = max(one, two) * s.numberScale.coerceIn(40, 100) / 100f
+                val nh = (if (useTwo) digitH * (2 + lineGap) else digitH) * size
+                drawNumber(left, top + (innerH - nh) / 2f, size, useTwo, boxW = innerW, centre = true)
+            }
+            // Wide and short: number left, label and caption stacked on the right.
+            hd < 120 && wd >= 250 -> {
+                val sideW = innerW * 0.42f
+                val lt = label?.let { fitText(it, labelP, sideW) }
+                val ct = if (caption != null) fitText(captions, capP, sideW) else null
+                val size = fit(innerW - sideW - 12f * d, innerH, false) * s.numberScale.coerceIn(40, 100) / 100f
+                val nh = digitH * size
+                drawNumber(left, top + (innerH - nh) / 2f, size, false)
+                val blockH = (if (lt != null) lineH(labelP) else 0f) + (if (ct != null) lineH(capP) + (if (lt != null) 2f * d else 0f) else 0f)
+                var y = top + (innerH - blockH) / 2f
+                lt?.let { c.drawText(it, right - labelP.measureText(it), y - labelP.fontMetrics.ascent, labelP); y += lineH(labelP) + 2f * d }
+                ct?.let { c.drawText(it, right - capP.measureText(it), y - capP.fontMetrics.ascent, capP) }
+            }
+            else -> {
+                val big = wd >= 250 && hd >= 150
+                // Two-line number on tall widgets, and on square ones when it's clearly bigger.
+                val tall = hd > wd * 0.9f
+                val iconSize = (labelP.textSize * 1.25f).coerceIn(12f * d, 22f * d)
+                val gapL = labelP.textSize * 0.5f
+                val gapC = capP.textSize * 0.4f
+                val stripH = if (big && day != null && day.hasData) 3f * d else 0f
+                val stripGap = if (stripH > 0) 12f * d else 0f
+                var lt = label
+                var ct = caption
+                val topRow = { if (lt != null) lineH(labelP) + gapL else if (s.clock) iconSize + gapL else 0f }
+                val bottomRows = { (if (ct != null) lineH(capP) + gapC else 0f) + stripH + stripGap }
+                var two = false
+                fun best(): Float {
+                    val boxH = innerH - topRow() - bottomRows()
+                    val one = fit(innerW, boxH, false)
+                    val t = if (tall) fit(innerW, boxH, true) else 0f
+                    two = t > one * (if (hd > wd * 1.25f) 1.15f else 1.3f)
+                    return if (two) t else one
+                }
+                var size = best()
+                // Short widgets (2 × 1): room for the number first; drop the caption, then the label.
+                if (ct != null && size < labelP.textSize * 2.1f) { ct = null; size = best() }
+                if (lt != null && size < labelP.textSize * 1.7f) { lt = null; size = best() }
+                size *= s.numberScale.coerceIn(40, 100) / 100f
+
+                // Top line: label, and the clock at the far end.
+                lt?.let {
+                    val t = fitText(it, labelP, innerW - if (s.clock) iconSize + 8f * d else 0f)
+                    c.drawText(t, left, top - labelP.fontMetrics.ascent, labelP)
+                }
+                if (s.clock) {
+                    val cy = if (lt != null) top + lineH(labelP) / 2f else top + iconSize / 2f
+                    drawClock(c, right - iconSize / 2f, cy, iconSize, pal.text, d)
+                }
+                // Bottom: number, caption, strip.
+                var y = bottom
+                if (stripH > 0 && day != null) {
+                    drawStrip(c, day, left, y - stripH, innerW, stripH, pal)
+                    y -= stripH + stripGap
+                }
+                ct?.let {
+                    val t = fitText(captions, capP, innerW)
+                    y -= lineH(capP)
+                    c.drawText(t, left, y - capP.fontMetrics.ascent, capP)
+                    y -= gapC
+                }
+                val nh = (if (two) digitH * (2 + lineGap) else digitH) * size
+                drawNumber(left, y - nh, size, two)
+            }
         }
         c.restore()
         return bmp
@@ -195,24 +292,38 @@ object Renderer {
         if (shadow) setShadowLayer(size * 0.12f, 0f, size * 0.04f, 0x66000000)
     }
 
-    /**
-     * Purely decorative: a soft scalloped shape (like Material's "cookie") sitting off the top-right corner,
-     * mostly outside the widget and very faint.
-     */
-    private fun drawShape(c: Canvas, w: Float, minSide: Float, color: Int, strength: Float) {
-        val radius = minSide * 0.22f
-        val cx = w - radius * 0.2f
-        val cy = radius * 0.2f
-        val path = Path()
-        val steps = 180
-        for (i in 0..steps) {
-            val a = i.toDouble() / steps * 2 * Math.PI
-            val rr = radius * (1f + 0.07f * cos(9 * a).toFloat())
-            val px = cx + rr * cos(a).toFloat()
-            val py = cy + rr * sin(a).toFloat()
-            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+    /** A thin line clock, hands at ten past ten. Faint: it's decoration, not information. */
+    private fun drawClock(c: Canvas, cx: Float, cy: Float, size: Float, color: Int, d: Float) {
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = withAlpha(color, 0.6f)
+            style = Paint.Style.STROKE
+            strokeWidth = max(1f * d, size * 0.07f)
+            strokeCap = Paint.Cap.ROUND
         }
-        path.close()
-        c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = withAlpha(color, strength) })
+        val r = size / 2f - stroke.strokeWidth / 2f
+        c.drawCircle(cx, cy, r, stroke)
+        fun hand(deg: Double, len: Float) {
+            val a = Math.toRadians(deg - 90)
+            c.drawLine(cx, cy, cx + len * cos(a).toFloat(), cy + len * sin(a).toFloat(), stroke)
+        }
+        hand(305.0, r * 0.45f) // hour hand, just past 10
+        hand(60.0, r * 0.68f)  // minute hand at 10 past
+    }
+
+    /** The day in one hairline: away in the number's colour, the rest faint. */
+    private fun drawStrip(c: Canvas, day: Day, x: Float, y: Float, w: Float, h: Float, pal: Palette) {
+        val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = withAlpha(pal.text, 0.18f) }
+        val on = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = withAlpha(pal.number, 0.85f) }
+        val rr = h / 2f
+        c.drawRoundRect(RectF(x, y, x + w, y + h), rr, rr, track)
+        val span = (day.end - day.start).toFloat()
+        c.save()
+        c.clipRect(x, y, x + w * ((day.until - day.start) / span), y + h)
+        for (b in day.breaks) {
+            val a = x + w * ((b.start - day.start) / span)
+            val e = x + w * ((b.end - day.start) / span)
+            c.drawRoundRect(RectF(a, y, max(e, a + h), y + h), rr, rr, on)
+        }
+        c.restore()
     }
 }

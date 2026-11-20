@@ -10,9 +10,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,21 +43,38 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private enum class Page { MAIN, NUMBER_FONT, TEXT_FONT, NUMBER_TYPEFACE, TEXT_TYPEFACE }
+/** Which text a font setting is for. */
+private enum class Part(val title: String) { NUMBER("Number"), LABEL("Label"), CAPTION("Below the number") }
+
+/** Sub-pages of the Widget tab. [depth] decides which way the page slides. */
+private enum class Page(val title: String, val depth: Int, val part: Part? = null) {
+    TEXT("Text", 1), FONTS("Fonts", 1), LOOK("Look", 1), TAP("On tap", 1),
+    NUMBER_TYPEFACE("Number typeface", 2, Part.NUMBER),
+    LABEL_TYPEFACE("Label typeface", 2, Part.LABEL),
+    CAPTION_TYPEFACE("Caption typeface", 2, Part.CAPTION),
+}
+
+private fun Style.font(p: Part) = when (p) { Part.NUMBER -> numberFont; Part.LABEL -> labelFont; Part.CAPTION -> captionFont }
+private fun Style.withFont(p: Part, f: FontSpec) = when (p) {
+    Part.NUMBER -> copy(numberFont = f); Part.LABEL -> copy(labelFont = f); Part.CAPTION -> copy(captionFont = f)
+}
 
 /**
- * The widget's look: a preview (drawn by the same code as the widget, at the placed widget's size) and the
- * options. Fonts open their own page, as in Aria. Every change is saved and pushed to the home screen.
+ * The Widget tab, laid out like Minutia: a preview and a short list of rows showing their current values;
+ * each row opens its own page (shared-axis slide, like Aria and Minutia), with the preview pinned on top.
+ * Every change is saved and pushed to the home screen.
  */
 @Composable
 fun WidgetEditor(day: Day?, rules: Rules) {
@@ -73,110 +93,74 @@ fun WidgetEditor(day: Day?, rules: Rules) {
     }
     val previewDay = day ?: remember(rules) { Sample.today(rules, System.currentTimeMillis()) }
     val loader = remember { FontLoader(ctx, scope) { fontTick++ } }
-    var page by rememberSaveable { mutableStateOf(Page.MAIN) }
-    BackHandler(page != Page.MAIN) {
-        page = when (page) {
-            Page.NUMBER_TYPEFACE -> Page.NUMBER_FONT
-            Page.TEXT_TYPEFACE -> Page.TEXT_FONT
-            else -> Page.MAIN
-        }
-    }
-    val preview: @Composable () -> Unit = { Preview(style, size, previewDay, rules, fontTick) }
-
-    AnimatedContent(page, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }, label = "page") { p ->
-        when (p) {
-            Page.MAIN -> EditorMain(style, set, preview, onFont = { page = if (it) Page.NUMBER_FONT else Page.TEXT_FONT })
-            Page.NUMBER_FONT, Page.TEXT_FONT -> {
-                val number = p == Page.NUMBER_FONT
-                FontPage(
-                    title = if (number) "Number font" else "Label and caption font",
-                    spec = if (number) style.numberFont else style.textFont,
-                    loader = loader,
-                    preview = preview,
-                    onSpec = { f -> set(if (number) style.copy(numberFont = f) else style.copy(textFont = f)) },
-                    onTypeface = { page = if (number) Page.NUMBER_TYPEFACE else Page.TEXT_TYPEFACE },
-                    onBack = { page = Page.MAIN },
-                )
-            }
-            Page.NUMBER_TYPEFACE, Page.TEXT_TYPEFACE -> {
-                val number = p == Page.NUMBER_TYPEFACE
-                TypefacePage(
-                    spec = if (number) style.numberFont else style.textFont,
-                    loader = loader,
-                    onSpec = { f -> set(if (number) style.copy(numberFont = f) else style.copy(textFont = f)) },
-                    onBack = { page = if (number) Page.NUMBER_FONT else Page.TEXT_FONT },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EditorMain(style: Style, set: (Style) -> Unit, preview: @Composable () -> Unit, onFont: (Boolean) -> Unit) {
-    val ctx = LocalContext.current
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    var appPicker by remember { mutableStateOf(false) }
+    var page by rememberSaveable { mutableStateOf<Page?>(null) }
+    val back: () -> Unit = { page = if ((page?.depth ?: 0) == 2) Page.FONTS else null }
+    BackHandler(page != null) { back() }
+    var menu by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
-    Scaffold(
-        modifier = Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = { LargeTopAppBar(title = { Text("Widget") }, scrollBehavior = scroll, colors = barColors()) },
-    ) { pad ->
-        Column(
-            Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            preview()
+    var appPicker by remember { mutableStateOf(false) }
 
-            Group("Text") {
-                item { SwitchRow("Label", style.showLabel) { set(style.copy(showLabel = it)) } }
-                if (style.showLabel) item { TextRow("Label text", style.label) { set(style.copy(label = it)) } }
-                item { ChoiceRow("Below the number", Caption.entries, style.caption, { it.title }) { set(style.copy(caption = it)) } }
-                item { ChoiceRow("Number", NumberFormat.entries, style.format, { it.title }) { set(style.copy(format = it)) } }
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            // Material shared axis X: deeper pages come in from the right, going back from the left.
+            val dir = if ((targetState?.depth ?: 0) > (initialState?.depth ?: 0)) 1 else -1
+            (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> dir * w / 6 } + fadeIn(tween(220, delayMillis = 60)))
+                .togetherWith(slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { w -> -dir * w / 6 } + fadeOut(tween(120)))
+        },
+        label = "page",
+    ) { shown ->
+        val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        Scaffold(
+            modifier = Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                LargeTopAppBar(
+                    title = { Text(shown?.title ?: "Widget") },
+                    navigationIcon = { if (shown != null) IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
+                    actions = {
+                        if (shown == null) Box {
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(text = { Text("Reset widget") }, onClick = { menu = false; confirmReset = true })
+                            }
+                        }
+                    },
+                    scrollBehavior = scroll,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            },
+        ) { pad ->
+            val part = shown?.part
+            if (part != null) {
+                Box(Modifier.padding(pad)) {
+                    TypefacePage(style.font(part), loader) { f -> set(style.withFont(part, f)) }
+                }
+                return@Scaffold
             }
-
-            Group("Font") {
-                item { NavRow("Number", fontSummary(style.numberFont), Icons.Rounded.FontDownload) { onFont(true) } }
-                item { NavRow("Label and caption", fontSummary(style.textFont), Icons.Rounded.TextFields) { onFont(false) } }
-            }
-
-            Group("Look") {
-                item {
-                    Pad {
-                        Text("Theme", style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.height(10.dp))
-                        Segmented(ThemeMode.entries, style.theme, { themeName(it) }) { set(style.copy(theme = it)) }
-                        Spacer(Modifier.height(18.dp))
-                        Text("Background", style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.height(10.dp))
-                        Segmented(Background.entries, style.background, { it.title }) { set(style.copy(background = it)) }
-                        Spacer(Modifier.height(18.dp))
-                        Text("Alignment", style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.height(10.dp))
-                        Segmented(HAlign.entries, style.hAlign, { it.title }) { set(style.copy(hAlign = it)) }
+            Column(Modifier.fillMaxSize().padding(pad)) {
+                // Sub-pages keep the preview in view; the main page lets it scroll away.
+                if (shown != null) {
+                    Box(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
+                        Preview(style, size, previewDay, rules, fontTick, 168.dp)
                     }
                 }
-                item { SliderRow("Number size", style.numberScale, 40..100, "${style.numberScale}%", step = 5) { set(style.copy(numberScale = it)) } }
-                item { SwitchRow("Corner shape", style.shape, summary = "A small faint shape in the corner, just for looks") { set(style.copy(shape = it)) } }
-            }
-
-            Group("On tap") {
-                item { ChoiceRow(null, Tap.entries, style.tap, { it.title }) { set(style.copy(tap = it)); if (it == Tap.APP && style.tapPackage.isBlank()) appPicker = true } }
-                if (style.tap == Tap.APP) item {
-                    NavRow("App", if (style.tapPackage.isBlank()) "Choose" else appLabel(ctx, style.tapPackage), Icons.Rounded.TouchApp) { appPicker = true }
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
-                val mgr = remember { AppWidgetManager.getInstance(ctx) }
-                if (Widgets.ids(ctx).isEmpty() && mgr.isRequestPinAppWidgetSupported) {
-                    Button(onClick = { runCatching { mgr.requestPinAppWidget(Widgets.component(ctx), null, null) } }) {
-                        Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(8.dp)); Text("Add to home screen")
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    when (shown) {
+                        null -> MainList(style, previewDay, rules, fontTick, size) { page = it }
+                        Page.TEXT -> TextPage(style, set)
+                        Page.FONTS -> FontsPage(style, set, loader) { page = it }
+                        Page.LOOK -> LookPage(style, set)
+                        Page.TAP -> TapPage(style, set) { appPicker = true }
+                        else -> {}
                     }
-                }
-                OutlinedButton(onClick = { confirmReset = true }) {
-                    Icon(Icons.Rounded.RestartAlt, null); Spacer(Modifier.width(8.dp)); Text("Reset")
                 }
             }
         }
@@ -196,23 +180,167 @@ private fun EditorMain(style: Style, set: (Style) -> Unit, preview: @Composable 
 }
 
 @Composable
-private fun barColors() = TopAppBarDefaults.topAppBarColors(
-    containerColor = MaterialTheme.colorScheme.surface,
-    scrolledContainerColor = MaterialTheme.colorScheme.surface,
-)
+private fun MainList(style: Style, day: Day, rules: Rules, fontTick: Int, size: Pair<Int, Int>, open: (Page) -> Unit) {
+    val ctx = LocalContext.current
+    Preview(style, size, day, rules, fontTick, 220.dp)
+    Group {
+        item { NavRow("Text", textSummary(style), onClick = { open(Page.TEXT) }) }
+        item { NavRow("Fonts", fontsSummary(style), onClick = { open(Page.FONTS) }) }
+        item { NavRow("Look", lookSummary(style), onClick = { open(Page.LOOK) }) }
+        item {
+            NavRow("On tap", if (style.tap == Tap.APP && style.tapPackage.isNotBlank()) "Open " + appLabel(ctx, style.tapPackage) else style.tap.title,
+                onClick = { open(Page.TAP) })
+        }
+    }
+    val mgr = remember { AppWidgetManager.getInstance(ctx) }
+    if (Widgets.ids(ctx).isEmpty() && mgr.isRequestPinAppWidgetSupported) {
+        Group {
+            item {
+                ListItem(
+                    headlineContent = { Text("Not on your home screen yet") },
+                    supportingContent = { Text("Add it, then come back to style it") },
+                    trailingContent = {
+                        FilledTonalButton(onClick = { runCatching { mgr.requestPinAppWidget(Widgets.component(ctx), null, null) } }) { Text("Add") }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                )
+            }
+        }
+    }
+}
 
-private fun themeName(t: ThemeMode) = when (t) { ThemeMode.AUTO -> "Auto"; ThemeMode.LIGHT -> "Light"; ThemeMode.DARK -> "Dark" }
+private fun textSummary(s: Style) = listOfNotNull(
+    if (s.showLabel) s.label.ifBlank { null } else null,
+    s.format.title,
+    when (s.caption) { Caption.NONE -> null; Caption.WINDOW -> "Time span"; else -> s.caption.title },
+).joinToString(" · ")
 
-private fun fontSummary(f: FontSpec) = if (f.source == FontSource.FILE) f.title else f.title + " · " + weightName(f.weight)
+private fun fontsSummary(s: Style): String {
+    val names = listOf(s.numberFont, s.labelFont, s.captionFont).map { it.title }.distinct()
+    return if (names.size == 1) names[0] else names[0] + " · " + names.drop(1).joinToString(" · ")
+}
+
+private fun lookSummary(s: Style) = listOfNotNull(
+    when (s.theme) { ThemeMode.AUTO -> "Auto"; ThemeMode.LIGHT -> "Light"; ThemeMode.DARK -> "Dark" },
+    s.background.title,
+    if (s.clock) "Clock" else null,
+).joinToString(" · ")
+
+@Composable
+private fun TextPage(style: Style, set: (Style) -> Unit) {
+    Group {
+        item { SwitchRow("Label", style.showLabel) { set(style.copy(showLabel = it)) } }
+        if (style.showLabel) item { TextRow("Label text", style.label) { set(style.copy(label = it)) } }
+    }
+    Group {
+        item { ChoiceRow("Number", NumberFormat.entries, style.format, { it.title }) { set(style.copy(format = it)) } }
+        item { ChoiceRow("Below the number", Caption.entries, style.caption, { it.title }) { set(style.copy(caption = it)) } }
+    }
+}
+
+@Composable
+private fun FontsPage(style: Style, set: (Style) -> Unit, loader: FontLoader, open: (Page) -> Unit) {
+    loader.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 8.dp)) }
+    FontGroup(Part.NUMBER, style, set, loader, Page.NUMBER_TYPEFACE, open, sizeRange = 40..100, sizeText = { "$it%" })
+    if (style.showLabel) FontGroup(Part.LABEL, style, set, loader, Page.LABEL_TYPEFACE, open, sizeRange = 70..150, sizeText = { "$it%" })
+    if (style.caption != Caption.NONE) FontGroup(Part.CAPTION, style, set, loader, Page.CAPTION_TYPEFACE, open, sizeRange = 70..150, sizeText = { "$it%" })
+}
+
+/** One text's font: typeface (its own page), weight and size. Weight applies on release (a Google font may need it downloaded). */
+@Composable
+private fun FontGroup(
+    part: Part, style: Style, set: (Style) -> Unit, loader: FontLoader, typefacePage: Page, open: (Page) -> Unit,
+    sizeRange: IntRange, sizeText: (Int) -> String,
+) {
+    val spec = style.font(part)
+    val sizeValue = when (part) { Part.NUMBER -> style.numberScale; Part.LABEL -> style.labelScale; Part.CAPTION -> style.captionScale }
+    var weight by remember(spec.weight) { mutableFloatStateOf(spec.weight.toFloat()) }
+    Group(part.title) {
+        item {
+            NavRow("Typeface", if (loader.busy != null && spec.source == FontSource.GOOGLE) "Downloading ${loader.busy}…" else spec.title,
+                onClick = { open(typefacePage) })
+        }
+        item {
+            Pad {
+                if (spec.source != FontSource.FILE) {
+                    SliderLabel("Weight", weightName(weight.roundToInt()))
+                    Slider(
+                        value = weight,
+                        onValueChange = { weight = it },
+                        onValueChangeFinished = { loader.use(spec.copy(weight = (weight / 100).roundToInt() * 100)) { f -> set(style.withFont(part, f)) } },
+                        valueRange = 100f..900f,
+                        steps = 7,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                SliderLabel("Size", sizeText(sizeValue))
+                Slider(
+                    value = sizeValue.toFloat(),
+                    onValueChange = { v ->
+                        val n = ((v / 5).roundToInt() * 5).coerceIn(sizeRange.first, sizeRange.last)
+                        set(when (part) {
+                            Part.NUMBER -> style.copy(numberScale = n)
+                            Part.LABEL -> style.copy(labelScale = n)
+                            Part.CAPTION -> style.copy(captionScale = n)
+                        })
+                    },
+                    valueRange = sizeRange.first.toFloat()..sizeRange.last.toFloat(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SliderLabel(title: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun LookPage(style: Style, set: (Style) -> Unit) {
+    Group {
+        item {
+            Pad {
+                Text("Theme", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(10.dp))
+                Segmented(ThemeMode.entries, style.theme, {
+                    when (it) { ThemeMode.AUTO -> "Auto"; ThemeMode.LIGHT -> "Light"; ThemeMode.DARK -> "Dark" }
+                }) { set(style.copy(theme = it)) }
+            }
+        }
+        item {
+            Pad {
+                Text("Background", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(10.dp))
+                Segmented(Background.entries, style.background, { it.title }) { set(style.copy(background = it)) }
+            }
+        }
+        item { SwitchRow("Clock", style.clock, summary = "A thin clock in the corner, just for looks") { set(style.copy(clock = it)) } }
+    }
+}
+
+@Composable
+private fun TapPage(style: Style, set: (Style) -> Unit, pickApp: () -> Unit) {
+    val ctx = LocalContext.current
+    Group {
+        item { ChoiceRow(null, Tap.entries, style.tap, { it.title }) { set(style.copy(tap = it)); if (it == Tap.APP && style.tapPackage.isBlank()) pickApp() } }
+        if (style.tap == Tap.APP) item {
+            NavRow("App", if (style.tapPackage.isBlank()) "Choose" else appLabel(ctx, style.tapPackage), onClick = pickApp)
+        }
+    }
+}
 
 internal fun weightName(w: Int) = when {
     w <= 150 -> "Thin"; w <= 250 -> "Extra light"; w <= 350 -> "Light"; w <= 450 -> "Regular"; w <= 550 -> "Medium"
     w <= 650 -> "Semibold"; w <= 750 -> "Bold"; w <= 850 -> "Extra bold"; else -> "Black"
 }
 
-/** The widget at its real size (the placed widget's, else 2 × 2) on a wallpaper-like backdrop. */
+/** The widget at its real proportions (the placed widget's size, else 2 × 2) on a wallpaper-like backdrop. */
 @Composable
-private fun Preview(style: Style, size: Pair<Int, Int>, day: Day, rules: Rules, fontTick: Int) {
+private fun Preview(style: Style, size: Pair<Int, Int>, day: Day, rules: Rules, fontTick: Int, height: Dp) {
     val ctx = LocalContext.current
     val density = LocalDensity.current.density
     val dark = isSystemInDarkTheme()
@@ -222,12 +350,12 @@ private fun Preview(style: Style, size: Pair<Int, Int>, day: Day, rules: Rules, 
         Renderer.render(ctx, style, (w * density).toInt(), (h * density).toInt(), density, day, rules, dark).asImageBitmap()
     }
     Box(
-        Modifier.fillMaxWidth().heightIn(min = 200.dp).clip(RoundedCornerShape(32.dp))
-            .background(Brush.linearGradient(listOf(scheme.tertiaryContainer, scheme.primaryContainer, scheme.secondaryContainer)))
-            .padding(vertical = 28.dp),
+        Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(32.dp))
+            .background(Brush.linearGradient(listOf(scheme.tertiaryContainer, scheme.primaryContainer, scheme.secondaryContainer))),
         contentAlignment = Alignment.Center,
     ) {
-        Image(bmp, contentDescription = "Widget preview", modifier = Modifier.size(w.dp, h.dp))
+        Image(bmp, contentDescription = "Widget preview", contentScale = ContentScale.Fit,
+            modifier = Modifier.padding(18.dp).sizeIn(maxWidth = w.dp, maxHeight = h.dp).fillMaxSize())
     }
 }
 
@@ -277,69 +405,6 @@ private class FontLoader(val ctx: Context, val scope: CoroutineScope, val onLoad
     }
 }
 
-/** One font setting, laid out like Aria's: preview, the typeface (its own page), and weight on a slider. */
-@Composable
-private fun FontPage(
-    title: String, spec: FontSpec, loader: FontLoader, preview: @Composable () -> Unit,
-    onSpec: (FontSpec) -> Unit, onTypeface: () -> Unit, onBack: () -> Unit,
-) {
-    var weight by remember(spec.weight) { mutableFloatStateOf(spec.weight.toFloat()) }
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
-                colors = barColors(),
-            )
-        },
-    ) { pad ->
-        Column(
-            Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            preview()
-            Group("Typeface") {
-                item {
-                    NavRow(
-                        spec.title,
-                        when {
-                            loader.busy != null -> "Downloading ${loader.busy}…"
-                            spec.source == FontSource.FILE -> "From a file · tap to change"
-                            else -> "System, any Google Font, or a file"
-                        },
-                        Icons.Rounded.FontDownload,
-                        onClick = onTypeface,
-                    )
-                }
-            }
-            loader.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 8.dp)) }
-            if (spec.source != FontSource.FILE) {
-                Group("Style") {
-                    item {
-                        Pad {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Weight", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                                Text(weightName(weight.roundToInt()), style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary)
-                            }
-                            Slider(
-                                value = weight,
-                                onValueChange = { weight = it },
-                                // Applied on release: a Google font may need that weight downloaded first.
-                                onValueChangeFinished = { loader.use(spec.copy(weight = (weight / 100).roundToInt() * 100), onSpec) },
-                                valueRange = 100f..900f,
-                                steps = 7,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 private val CATEGORIES = listOf("Sans" to "Sans Serif", "Serif" to "Serif", "Display" to "Display", "Mono" to "Monospace", "Handwriting" to "Handwriting")
 
 /**
@@ -348,7 +413,7 @@ private val CATEGORIES = listOf("Sans" to "Sans Serif", "Serif" to "Serif", "Dis
  * Tapping one applies it straight away (Google fonts download first); a tick marks the current one.
  */
 @Composable
-private fun TypefacePage(spec: FontSpec, loader: FontLoader, onSpec: (FontSpec) -> Unit, onBack: () -> Unit) {
+private fun TypefacePage(spec: FontSpec, loader: FontLoader, onSpec: (FontSpec) -> Unit) {
     val ctx = LocalContext.current
     val catalogue by produceState(Fonts.cachedFamilies(ctx)) { Fonts.loadCatalogue(ctx); value = Fonts.cachedFamilies(ctx) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -365,17 +430,8 @@ private fun TypefacePage(spec: FontSpec, loader: FontLoader, onSpec: (FontSpec) 
     fun google(name: String) = loader.use(FontSpec(FontSource.GOOGLE, name, spec.weight), onSpec)
     fun isCurrent(name: String) = spec.source == FontSource.GOOGLE && spec.family.equals(name, ignoreCase = true)
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = { Text("Typeface") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
-                colors = barColors(),
-            )
-        },
-    ) { pad ->
-        Column(Modifier.fillMaxSize().padding(pad)) {
+    run {
+        Column(Modifier.fillMaxSize()) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -404,7 +460,7 @@ private fun TypefacePage(spec: FontSpec, loader: FontLoader, onSpec: (FontSpec) 
                     }
                     item(key = "file") {
                         FontRow("From a file", null, if (spec.source == FontSource.FILE) "Your font · pick another" else ".ttf or .otf on your phone",
-                            spec.source == FontSource.FILE, false, icon = Icons.Rounded.FolderOpen) { pick.launch(arrayOf("*/*")) }
+                            spec.source == FontSource.FILE, false) { pick.launch(arrayOf("*/*")) }
                     }
                     item(key = "h-suggested") { Header("Suggested") }
                     items(suggested, key = { "s-$it" }) { name ->

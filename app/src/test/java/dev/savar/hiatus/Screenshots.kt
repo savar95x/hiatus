@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Rule
 import org.junit.Test
@@ -48,13 +50,13 @@ class Screenshots {
 
     /** Rows of looks × columns of sizes (dp), on a wallpaper-like gradient. */
     private fun sheet(name: String, rows: List<Pair<String, Style>>, dark: Boolean, rules: Rules = Rules()) {
-        val sizes = listOf(76 to 80, 168 to 80, 168 to 168, 344 to 168)
+        val sizes = listOf(76 to 80, 168 to 80, 344 to 80, 168 to 168, 344 to 168, 168 to 260)
         val day = Sample.today(rules, now)
         val d = 2.625f
         val gap = (18 * d).toInt()
         val labelH = (20 * d).toInt()
         val w = sizes.sumOf { (it.first * d).toInt() } + gap * (sizes.size + 1)
-        val rowH = (168 * d).toInt()
+        val rowH = (260 * d).toInt()
         val h = (rowH + labelH + gap) * rows.size + gap
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
@@ -79,13 +81,12 @@ class Screenshots {
 
     private fun looks() = listOf(
         "Default" to Style(),
-        "Corner shape" to Style(shape = true),
+        "Clock" to Style(clock = true),
         "Nothing below the number" to Style(caption = Caption.NONE),
-        "Nothing below, centred, no label" to Style(caption = Caption.NONE, hAlign = HAlign.CENTER, showLabel = false),
-        "Tinted, centred, share of day, shape" to Style(background = Background.TINTED, hAlign = HAlign.CENTER, caption = Caption.SHARE, shape = true),
+        "Tinted, share of day, clock" to Style(background = Background.TINTED, caption = Caption.SHARE, clock = true),
         "Light, 2 hr 45 min, longest break" to Style(theme = ThemeMode.LIGHT, format = NumberFormat.WORDS, caption = Caption.LONGEST),
-        "Clock, no label, 70%" to Style(format = NumberFormat.CLOCK, showLabel = false, numberScale = 70, shape = true),
-        "Clear" to Style(background = Background.NONE, shape = true),
+        "2.8h, no label, 80%" to Style(format = NumberFormat.DECIMAL, showLabel = false, numberScale = 80),
+        "Clear, clock" to Style(background = Background.NONE, clock = true),
     )
 
     @Test fun widget_dark() = sheet("widget_dark", looks(), dark = true)
@@ -94,12 +95,16 @@ class Screenshots {
 
     // ------------------------------------------------------------------ screens
 
-    private fun screen(name: String, dark: Boolean, black: Boolean = false, content: @Composable () -> Unit) {
+    private fun screen(name: String, dark: Boolean, black: Boolean = false, after: () -> Unit = {}, content: @Composable () -> Unit) {
         Prefs.init(ctx)
         Prefs.setTheme(ctx, if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
         Prefs.setPureBlack(ctx, black)
         compose.mainClock.autoAdvance = false
         compose.setContent { HiatusTheme { content() } }
+        repeat(4) { compose.mainClock.advanceTimeBy(800); Thread.sleep(150) }
+        compose.mainClock.autoAdvance = true
+        after()
+        compose.waitForIdle()
         repeat(4) { compose.mainClock.advanceTimeBy(800); Thread.sleep(150) }
         save(compose.onRoot().captureToImage().asAndroidBitmap(), name)
     }
@@ -134,6 +139,18 @@ class Screenshots {
 
     @Config(qualifiers = "w411dp-h2600dp-xxhdpi")
     @Test fun editor() { val r = Rules(); val day = Sample.today(r, now); screen("editor", true) { WidgetEditor(day, r) } }
+
+    @Config(qualifiers = "w411dp-h2200dp-xxhdpi")
+    @Test fun editor_fonts() {
+        val r = Rules(); val day = Sample.today(r, now)
+        screen("editor_fonts", true, after = { compose.onNodeWithText("Fonts").performClick() }) { WidgetEditor(day, r) }
+    }
+
+    @Config(qualifiers = "w411dp-h1800dp-xxhdpi")
+    @Test fun editor_text() {
+        val r = Rules(); val day = Sample.today(r, now)
+        screen("editor_text", false, after = { compose.onNodeWithText("Text").performClick() }) { WidgetEditor(day, r) }
+    }
 
     @Config(qualifiers = "w411dp-h1800dp-xxhdpi")
     @Test fun settings() = screen("settings", true) { SettingsScreen(true) }

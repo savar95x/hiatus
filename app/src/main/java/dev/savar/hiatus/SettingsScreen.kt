@@ -61,7 +61,7 @@ fun SettingsScreen(granted: Boolean) {
                 item {
                     SwitchRow(
                         "Pure black", Prefs.pureBlack, summary = "Black background in dark theme, for OLED screens",
-                        enabled = Prefs.theme != ThemeMode.LIGHT, icon = Icons.Rounded.Contrast,
+                        enabled = Prefs.theme != ThemeMode.LIGHT,
                     ) { Prefs.setPureBlack(ctx, it) }
                 }
             }
@@ -94,8 +94,8 @@ fun SettingsScreen(granted: Boolean) {
                     }
                 }
                 if (rules.sleep == SleepMode.FIXED) {
-                    item { NavRow("Stop counting at", Fmt.clock(ctx, rules.bed), Icons.Rounded.Bedtime) { picking = true } }
-                    item { NavRow("Start again at", Fmt.clock(ctx, rules.wake), Icons.Rounded.WbSunny) { picking = false } }
+                    item { NavRow("Stop counting at", Fmt.clock(ctx, rules.bed)) { picking = true } }
+                    item { NavRow("Start again at", Fmt.clock(ctx, rules.wake)) { picking = false } }
                     item {
                         ChoiceRow(null, PRESETS, rules.bed to rules.wake, { (b, w) -> Fmt.clock(ctx, b) + " – " + Fmt.clock(ctx, w) }) { (b, w) ->
                             Prefs.setRules(ctx, rules.copy(bed = b, wake = w))
@@ -106,12 +106,12 @@ fun SettingsScreen(granted: Boolean) {
 
             Group("Permissions") {
                 item {
-                    NavRow("Usage access", if (granted) "Allowed" else "Needed to see when you unlock", Icons.Rounded.LockOpen) {
+                    NavRow("Usage access", if (granted) "Allowed" else "Needed to see when you unlock") {
                         openUsageAccess(ctx)
                     }
                 }
                 item {
-                    NavRow("Battery", "Set Hiatus to Unrestricted if the widget is slow to update after you unlock", Icons.Rounded.BatteryFull) {
+                    NavRow("Battery", "Set Hiatus to Unrestricted if the widget is slow to update after you unlock") {
                         runCatching {
                             ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)))
                         }
@@ -122,7 +122,7 @@ fun SettingsScreen(granted: Boolean) {
             Group("About") {
                 item { UpdateSettingsRow() }
                 item {
-                    NavRow("Source and releases", "github.com/savar95x/hiatus", Icons.Rounded.Code) {
+                    NavRow("Source and releases", "github.com/savar95x/hiatus") {
                         openUrl(ctx, "https://github.com/savar95x/hiatus/releases")
                     }
                 }
