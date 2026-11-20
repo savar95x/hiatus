@@ -3,16 +3,15 @@ package dev.savar.hiatus
 import android.content.Context
 import org.json.JSONObject
 
-enum class NumberFormat(val title: String) { HM("2h 45m"), WORDS("2 hr 45 min"), CLOCK("2:45") }
+enum class NumberFormat(val title: String) { HM("2h 45m"), WORDS("2 hr 45 min"), CLOCK("2:45"), DECIMAL("2.8h") }
 
 enum class Caption(val title: String) {
-    WINDOW("Time span"), SHARE("Share of day"), LONGEST("Longest break"), NONE("None"),
+    WINDOW("From … to …"), SHARE("Share of day"), LONGEST("Longest break"), NONE("None"),
 }
 
 /** Dark surface tinted by the wallpaper, a stronger wallpaper tone, or no background. */
 enum class Background(val title: String) { SURFACE("Surface"), TINTED("Tinted"), NONE("Clear") }
 
-enum class HAlign(val title: String) { START("Start"), CENTER("Centre") }
 enum class Tap(val title: String) { OPEN("Open Hiatus"), APP("Open an app"), REFRESH("Refresh") }
 enum class FontSource { SYSTEM, GOOGLE, FILE }
 
@@ -45,44 +44,50 @@ data class Style(
     val caption: Caption = Caption.WINDOW,
     val format: NumberFormat = NumberFormat.HM,
     val numberFont: FontSpec = FontSpec(weight = 400),
-    val textFont: FontSpec = FontSpec(weight = 500),
+    val labelFont: FontSpec = FontSpec(weight = 500),
+    val captionFont: FontSpec = FontSpec(weight = 500),
     val numberScale: Int = 100,          // % of the size that fits
+    val labelScale: Int = 100,           // % of the default text size
+    val captionScale: Int = 100,
     val theme: ThemeMode = ThemeMode.DARK,
     val background: Background = Background.SURFACE,
-    val hAlign: HAlign = HAlign.START,
-    val shape: Boolean = false,          // a faint abstract shape off the top-right corner
+    val clock: Boolean = false,          // a thin, faint clock in the top corner, just for looks
     val tap: Tap = Tap.OPEN,
     val tapPackage: String = "",
 ) {
     fun json(): String = JSONObject().apply {
         put("label", label); put("showLabel", showLabel); put("caption", caption.name); put("format", format.name)
-        put("numberFont", numberFont.json()); put("textFont", textFont.json()); put("numberScale", numberScale)
-        put("theme", theme.name); put("background", background.name); put("hAlign", hAlign.name)
-        put("shape", shape); put("tap", tap.name); put("tapPackage", tapPackage)
+        put("numberFont", numberFont.json()); put("labelFont", labelFont.json()); put("captionFont", captionFont.json())
+        put("numberScale", numberScale); put("labelScale", labelScale); put("captionScale", captionScale)
+        put("theme", theme.name); put("background", background.name)
+        put("clock", clock); put("tap", tap.name); put("tapPackage", tapPackage)
     }.toString()
 
     companion object {
         private inline fun <reified E : Enum<E>> JSONObject.enum(key: String, def: E): E =
             enumValues<E>().firstOrNull { it.name == optString(key) } ?: def
 
-        /** Reads this version's style, or keeps the fonts, label and tap action of a 0.7.0 one. */
+        /** Reads this version's style; older ones keep their fonts, label, format and tap action. */
         fun parse(text: String?): Style {
             val d = Style()
             if (text.isNullOrBlank()) return d
             return runCatching {
                 val o = JSONObject(text)
+                val oldText = o.optJSONObject("textFont") // 0.8–0.10: one font for label and caption
                 Style(
                     label = o.optString("label", d.label),
                     showLabel = o.optBoolean("showLabel", d.showLabel),
-                    caption = o.enum("caption", d.caption).let { if (o.has("shape")) it else d.caption },
+                    caption = o.enum("caption", d.caption).let { if (o.has("shape") || o.has("clock")) it else d.caption },
                     format = o.enum("format", d.format),
                     numberFont = FontSpec.from(o.optJSONObject("numberFont"), d.numberFont),
-                    textFont = FontSpec.from(o.optJSONObject("textFont"), d.textFont),
+                    labelFont = FontSpec.from(o.optJSONObject("labelFont") ?: oldText, d.labelFont),
+                    captionFont = FontSpec.from(o.optJSONObject("captionFont") ?: oldText, d.captionFont),
                     numberScale = o.optInt("numberScale", d.numberScale).coerceIn(40, 100),
+                    labelScale = o.optInt("labelScale", d.labelScale).coerceIn(70, 150),
+                    captionScale = o.optInt("captionScale", d.captionScale).coerceIn(70, 150),
                     theme = o.enum("theme", d.theme),
                     background = o.enum("background", d.background),
-                    hAlign = o.enum("hAlign", d.hAlign),
-                    shape = o.optBoolean("shape", d.shape),
+                    clock = o.optBoolean("clock", o.optBoolean("shape", d.clock)),
                     tap = o.enum("tap", d.tap),
                     tapPackage = o.optString("tapPackage", d.tapPackage),
                 )

@@ -35,6 +35,7 @@ object Fmt {
                 else -> listOf("$h" to false, " hr " to true, "$r" to false, " min" to true)
             }
             NumberFormat.CLOCK -> listOf("%d:%02d".format(h, r) to false)
+            NumberFormat.DECIMAL -> listOf("%.1f".format(m / 60f) to false, "h" to true)
         }
     }
 
@@ -56,11 +57,11 @@ object Fmt {
 
     fun date(t: Long): String = SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(t))
 
-    /** When this day's count runs: "7:12 AM – 4:25 PM" (from waking up when sleep is left out). */
-    fun window(ctx: Context, day: Day): String {
+    /** When this day's count runs: "From 7:12 AM to 4:25 PM" (from waking up when sleep is left out). */
+    fun window(ctx: Context, day: Day, now: String? = null): String {
         val from = day.countFrom ?: day.start
-        val to = if (day.until >= day.end) "midnight" else time(ctx, day.until)
-        return (if (from == day.start) "Midnight" else time(ctx, from)) + " – " + to
+        val to = now ?: if (day.until >= day.end) "midnight" else time(ctx, day.until)
+        return "From " + (if (from == day.start) "midnight" else time(ctx, from)) + " to " + to
     }
 
     fun shareText(day: Day, rules: Rules): String =

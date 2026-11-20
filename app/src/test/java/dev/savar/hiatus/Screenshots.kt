@@ -48,13 +48,13 @@ class Screenshots {
 
     /** Rows of looks × columns of sizes (dp), on a wallpaper-like gradient. */
     private fun sheet(name: String, rows: List<Pair<String, Style>>, dark: Boolean, rules: Rules = Rules()) {
-        val sizes = listOf(76 to 80, 168 to 80, 168 to 168, 344 to 168)
+        val sizes = listOf(76 to 80, 168 to 80, 344 to 80, 168 to 168, 344 to 168, 168 to 260)
         val day = Sample.today(rules, now)
         val d = 2.625f
         val gap = (18 * d).toInt()
         val labelH = (20 * d).toInt()
         val w = sizes.sumOf { (it.first * d).toInt() } + gap * (sizes.size + 1)
-        val rowH = (168 * d).toInt()
+        val rowH = (260 * d).toInt()
         val h = (rowH + labelH + gap) * rows.size + gap
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
@@ -79,13 +79,12 @@ class Screenshots {
 
     private fun looks() = listOf(
         "Default" to Style(),
-        "Corner shape" to Style(shape = true),
+        "Clock" to Style(clock = true),
         "Nothing below the number" to Style(caption = Caption.NONE),
-        "Nothing below, centred, no label" to Style(caption = Caption.NONE, hAlign = HAlign.CENTER, showLabel = false),
-        "Tinted, centred, share of day, shape" to Style(background = Background.TINTED, hAlign = HAlign.CENTER, caption = Caption.SHARE, shape = true),
+        "Tinted, share of day, clock" to Style(background = Background.TINTED, caption = Caption.SHARE, clock = true),
         "Light, 2 hr 45 min, longest break" to Style(theme = ThemeMode.LIGHT, format = NumberFormat.WORDS, caption = Caption.LONGEST),
-        "Clock, no label, 70%" to Style(format = NumberFormat.CLOCK, showLabel = false, numberScale = 70, shape = true),
-        "Clear" to Style(background = Background.NONE, shape = true),
+        "2.8h, no label, 80%" to Style(format = NumberFormat.DECIMAL, showLabel = false, numberScale = 80),
+        "Clear, clock" to Style(background = Background.NONE, clock = true),
     )
 
     @Test fun widget_dark() = sheet("widget_dark", looks(), dark = true)
