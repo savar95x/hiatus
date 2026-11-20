@@ -241,6 +241,21 @@ object Usage {
         )
     }
 
+    /** Per hour of [day]: share of that hour spent away (0–1), or -1 for hours still to come. */
+    fun hourlyAway(day: DayStats): FloatArray {
+        val out = FloatArray(24) { -1f }
+        val cal = Calendar.getInstance().apply { timeInMillis = day.start }
+        for (h in 0 until 24) {
+            val hs = cal.timeInMillis
+            cal.add(Calendar.HOUR_OF_DAY, 1)
+            if (hs >= day.end) break
+            val he = min(cal.timeInMillis, day.end)
+            val len = (he - hs).coerceAtLeast(1)
+            out[h] = (1f - clip(day.use, hs, he) / len.toFloat()).coerceIn(0f, 1f)
+        }
+        return out
+    }
+
     private fun merge(ivs: List<Iv>): List<Iv> {
         if (ivs.isEmpty()) return ivs
         val sorted = ivs.sortedBy { it.s }

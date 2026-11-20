@@ -273,7 +273,7 @@ object WidgetRenderer {
 
         if (cfg.style == WidgetStyle.AWAY && cfg.decoration && report != null) {
             // A soft Material shape tucked into the top-right corner, a tone off the background.
-            val s = min(w, h) * 1.15f
+            val s = min(min(w, h) * 1.15f, 210 * d)
             val box = RectF(w - s * 0.6f, -s * 0.4f, w + s * 0.4f, s * 0.6f)
             val path = shapePath(cfg.shape, box)
             path.transform(Matrix().apply { setRotate(18f, box.centerX(), box.centerY()) })
@@ -392,25 +392,19 @@ object WidgetRenderer {
         }
     }
 
-    /** Midnight to midnight: away so far filled, phone use as gaps, the rest of the day faint. */
+    /** The day as 24 pills: brighter the more of that hour you were away; hours to come stay faint. */
     private fun timeline(c: Canvas, b: RectF, d: Float, p: Palette, day: DayStats) {
-        val start = day.start
-        val span = (Usage.dayStart(start, 1) - start).toFloat().coerceAtLeast(1f)
-        fun x(t: Long) = b.left + ((t - start) / span).coerceIn(0f, 1f) * b.width()
-        val rad = b.height() / 2
-        c.save()
-        c.clipPath(Path().apply { addRoundRect(b, rad, rad, Path.Direction.CW) })
+        val shares = Usage.hourlyAway(day)
+        val gap = max(1.5f * d, b.width() * 0.008f)
+        val segW = (b.width() - 23 * gap) / 24
+        val rad = min(segW, b.height()) / 2
         val pt = Paint(Paint.ANTI_ALIAS_FLAG)
-        pt.color = alpha(p.track, 0.5f)
-        c.drawRect(b, pt)
-        pt.color = p.number
-        c.drawRect(b.left, b.top, x(day.end), b.bottom, pt)
-        pt.color = p.track
-        for (iv in day.use) {
-            val x0 = x(iv.s)
-            c.drawRect(x0, b.top, max(x(iv.e), x0 + 1.5f * d), b.bottom, pt)
+        for (h in 0 until 24) {
+            val x = b.left + h * (segW + gap)
+            val sh = shares[h]
+            pt.color = if (sh < 0) alpha(p.track, 0.5f) else mix(p.track, p.number, 0.15f + 0.85f * sh)
+            c.drawRoundRect(RectF(x, b.top, x + segW, b.bottom), rad, rad, pt)
         }
-        c.restore()
     }
 
     /** Screen time against the daily goal. Wide widgets show the chosen stat beside the ring. */

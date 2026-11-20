@@ -383,7 +383,7 @@ private fun HeroCard(r: Report) {
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                DayTimeline(t, scheme.primary, scheme.onPrimaryContainer.copy(alpha = 0.18f), Modifier.fillMaxWidth().height(10.dp))
+                DayTimeline(t, scheme.primary, scheme.onPrimaryContainer.copy(alpha = 0.16f), Modifier.fillMaxWidth().height(14.dp))
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth()) {
                     listOf("12 AM", "6 AM", "12 PM", "6 PM").forEach {
@@ -410,21 +410,22 @@ private fun HeroCard(r: Report) {
     }
 }
 
-/** Midnight to midnight: away so far filled, phone use as gaps, the rest of the day faint. */
+/** The day as 24 pills, as on the Away widget: brighter the more of that hour you were away. */
 @Composable
 private fun DayTimeline(day: DayStats, away: Color, rest: Color, modifier: Modifier) {
+    val shares = remember(day) { Usage.hourlyAway(day) }
     val grow = remember(day.start) { Animatable(0f) }
     LaunchedEffect(day.start) { grow.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
-    Canvas(modifier.clip(RoundedCornerShape(50))) {
-        val start = day.start
-        val span = (Usage.dayStart(start, 1) - start).toFloat().coerceAtLeast(1f)
-        fun x(t: Long) = ((t - start) / span).coerceIn(0f, 1f) * size.width
-        drawRect(rest)
-        drawRect(away, size = Size(x(day.end) * grow.value, size.height))
-        for (iv in day.use) {
-            val x0 = x(iv.s)
-            if (x0 > x(day.end) * grow.value) continue
-            drawRect(rest, topLeft = Offset(x0, 0f), size = Size(maxOf(x(iv.e) - x0, 1.5.dp.toPx()), size.height))
+    Canvas(modifier) {
+        val gap = maxOf(2.dp.toPx(), size.width * 0.008f)
+        val segW = (size.width - 23 * gap) / 24
+        val rad = minOf(segW, size.height) / 2
+        for (h in 0 until 24) {
+            val sh = shares[h]
+            // Pills light up left to right as the card appears.
+            val on = (grow.value * 24 - h).coerceIn(0f, 1f)
+            val color = if (sh < 0) rest.copy(alpha = rest.alpha * 0.6f) else lerp(rest, away, (0.15f + 0.85f * sh) * on)
+            drawRoundRect(color, Offset(h * (segW + gap), 0f), Size(segW, size.height), CornerRadius(rad, rad))
         }
     }
 }
