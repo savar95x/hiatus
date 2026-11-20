@@ -215,66 +215,6 @@ internal fun Reveal(visible: Boolean, content: @Composable ColumnScope.() -> Uni
     ) { Column(content = content) }
 }
 
-// ------------------------------------------------------------------ colours
-
-internal val SWATCHES = listOf(
-    0xFFFFFFFF, 0xFFEEE7DC, 0xFFE2957A, 0xFFFF8A65, 0xFFFFB4A9, 0xFFF48FB1, 0xFFCE93D8, 0xFFB39DDB,
-    0xFF9FA8DA, 0xFF90CAF9, 0xFF80DEEA, 0xFF80CBC4, 0xFFA5D6A7, 0xFFDCE775, 0xFFFFE082, 0xFFBCAAA4,
-    0xFF9E9E9E, 0xFF607D8B, 0xFF3A3A3C, 0xFF1C1C1E, 0xFF000000,
-).map { it.toInt() }
-
-internal fun hex(c: Int) = String.format("#%06X", 0xFFFFFF and c)
-
-internal fun parseHex(s: String): Int? {
-    val t = s.trim().removePrefix("#")
-    if (t.length != 6) return null
-    return t.toLongOrNull(16)?.let { (it or 0xFF000000L).toInt() }
-}
-
-/** Swatches plus a hex field. [color] null = "Auto" (from the palette), offered when [auto] is given. */
-@Composable
-internal fun ColorChooser(title: String, color: Int?, auto: Int? = null, onPick: (Int?) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    var text by remember(color) { mutableStateOf(color?.let { hex(it) } ?: "") }
-    Pad {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it; parseHex(it)?.let(onPick) },
-                singleLine = true,
-                placeholder = { Text("Auto") },
-                textStyle = MaterialTheme.typography.bodyMedium,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.width(124.dp),
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (auto != null) item {
-                val sel = color == null
-                Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(Color(auto))
-                        .border(if (sel) 3.dp else 1.dp, if (sel) scheme.primary else scheme.outlineVariant, CircleShape)
-                        .clickable { onPick(null) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("A", style = MaterialTheme.typography.labelLarge,
-                        color = if (Renderer.luminance(auto) > 0.4) Color.Black else Color.White)
-                }
-            }
-            items(SWATCHES) { s ->
-                val sel = color != null && (color or 0xFF000000.toInt()) == s
-                Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(Color(s))
-                        .border(if (sel) 3.dp else 1.dp, if (sel) scheme.primary else scheme.outlineVariant, CircleShape)
-                        .clickable { onPick(s) },
-                )
-            }
-        }
-    }
-}
-
 // ------------------------------------------------------------------ apps
 
 internal class AppEntry(val label: String, val pkg: String, val icon: ImageBitmap)
@@ -282,7 +222,7 @@ internal class AppEntry(val label: String, val pkg: String, val icon: ImageBitma
 internal fun appLabel(ctx: Context, pkg: String): String = runCatching {
     val pm = ctx.packageManager
     pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-}.getOrDefault(pkg)
+}.getOrDefault(Fmt.pkgName(pkg))
 
 @Suppress("DEPRECATION")
 internal fun loadApps(ctx: Context): List<AppEntry> {

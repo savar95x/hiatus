@@ -47,9 +47,7 @@ private class PreviewSize(val label: String, val w: Int, val h: Int)
 @Composable
 fun WidgetEditor(day: Day?, rules: Rules) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     var style by remember { mutableStateOf(Style.load(ctx)) }
-    val sysDark = isSystemInDarkTheme()
     var fontTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(style) {
         Style.save(ctx, style)
@@ -85,16 +83,10 @@ fun WidgetEditor(day: Day?, rules: Rules) {
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Group("Text") {
-                item { SwitchRow("Label", style.showLabel, summary = if (style.showLabel) style.label.ifBlank { null } else "Hidden") { set(style.copy(showLabel = it)) } }
+                item { SwitchRow("Label", style.showLabel) { set(style.copy(showLabel = it)) } }
                 if (style.showLabel) item { TextRow("Label text", style.label) { set(style.copy(label = it)) } }
-                item {
-                    ChoiceRow("Caption", Caption.entries, style.caption, { it.title }) { set(style.copy(caption = it)) }
-                }
-                if (style.caption == Caption.CUSTOM) item {
-                    TextRow("Caption text", style.customCaption) { set(style.copy(customCaption = it)) }
-                }
+                item { ChoiceRow("Below the number", Caption.entries, style.caption, { it.title }) { set(style.copy(caption = it)) } }
                 item { ChoiceRow("Number", NumberFormat.entries, style.format, { it.title }) { set(style.copy(format = it)) } }
-                item { SwitchRow("Smaller units", style.smallUnits, summary = "h and m smaller than the digits") { set(style.copy(smallUnits = it)) } }
             }
 
             Group("Font") {
@@ -102,73 +94,24 @@ fun WidgetEditor(day: Day?, rules: Rules) {
                 item { NavRow("Label and caption", style.textFont.title + " · " + weightName(style.textFont.weight), Icons.Rounded.TextFields) { fontSheet = false } }
             }
 
-            Group("Colours") {
+            Group("Look") {
                 item {
                     Pad {
-                        Text("Widget theme", style = MaterialTheme.typography.bodyLarge)
+                        Text("Theme", style = MaterialTheme.typography.bodyLarge)
                         Spacer(Modifier.height(10.dp))
                         Segmented(ThemeMode.entries, style.theme, { themeName(it) }) { set(style.copy(theme = it)) }
-                    }
-                }
-                item {
-                    ChoiceRow("Background", Background.entries, style.background, { it.title },
-                        summary = "Surface and the tones follow your wallpaper") { set(style.copy(background = it)) }
-                }
-                if (style.background == Background.CUSTOM) item {
-                    ColorChooser("Background colour", style.bgColor) { c -> c?.let { set(style.copy(bgColor = it)) } }
-                }
-                if (style.background != Background.NONE) item {
-                    SliderRow("Opacity", style.bgAlpha, 0..100, "${style.bgAlpha}%", step = 5) { set(style.copy(bgAlpha = it)) }
-                }
-                val pal = Renderer.palette(ctx, style.copy(numberColor = null, textColor = null, iconColor = null), sysDark)
-                item { ColorChooser("Number colour", style.numberColor, auto = pal.number) { set(style.copy(numberColor = it)) } }
-                item { ColorChooser("Text colour", style.textColor, auto = pal.text) { set(style.copy(textColor = it)) } }
-            }
-
-            Group("Icon") {
-                item {
-                    ChoiceRow("Icon", IconKind.entries, style.icon, { it.title },
-                        summary = "A faint mark, just for looks") { set(style.copy(icon = it)) }
-                }
-                if (style.icon != IconKind.NONE) {
-                    item {
-                        Pad {
-                            Text("Where", style = MaterialTheme.typography.bodyLarge)
-                            Spacer(Modifier.height(10.dp))
-                            Segmented(IconPlace.entries, style.iconPlace, { it.title }) { set(style.copy(iconPlace = it)) }
-                        }
-                    }
-                    item { SliderRow("Strength", style.iconAlpha, 5..80, "${style.iconAlpha}%", step = 5) { set(style.copy(iconAlpha = it)) } }
-                    val pal = Renderer.palette(ctx, style.copy(iconColor = null), sysDark)
-                    item { ColorChooser("Icon colour", style.iconColor, auto = pal.accent) { set(style.copy(iconColor = it)) } }
-                }
-            }
-
-            Group("Layout") {
-                item {
-                    Pad {
+                        Spacer(Modifier.height(18.dp))
+                        Text("Background", style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.height(10.dp))
+                        Segmented(Background.entries, style.background, { it.title }) { set(style.copy(background = it)) }
+                        Spacer(Modifier.height(18.dp))
                         Text("Alignment", style = MaterialTheme.typography.bodyLarge)
                         Spacer(Modifier.height(10.dp))
-                        Segmented(HAlign.entries, style.hAlign, { when (it) { HAlign.START -> "Start"; HAlign.CENTER -> "Centre"; HAlign.END -> "End" } }) {
-                            set(style.copy(hAlign = it))
-                        }
+                        Segmented(HAlign.entries, style.hAlign, { it.title }) { set(style.copy(hAlign = it)) }
                     }
                 }
-                item {
-                    ChoiceRow("Vertical", VAlign.entries, style.vAlign, { it.title },
-                        summary = if (style.vAlign == VAlign.SPREAD) "Label at the top, number at the bottom" else null) { set(style.copy(vAlign = it)) }
-                }
-                item { SliderRow("Number size", style.numberScale, 30..100, "${style.numberScale}%", step = 5) { set(style.copy(numberScale = it)) } }
-                item { SliderRow("Text size", style.textScale, 60..160, "${style.textScale}%", step = 5) { set(style.copy(textScale = it)) } }
-                item { SliderRow("Padding", style.padding, 0..32, "${style.padding} dp", step = 2) { set(style.copy(padding = it)) } }
-                item {
-                    SwitchRow("Phone's corners", style.corners < 0, summary = "Rounded like your other widgets") {
-                        set(style.copy(corners = if (it) -1 else Renderer.systemCornerDp(ctx).toInt()))
-                    }
-                }
-                if (style.corners >= 0) item {
-                    SliderRow("Corners", style.corners, 0..60, "${style.corners} dp", step = 2) { set(style.copy(corners = it)) }
-                }
+                item { SliderRow("Number size", style.numberScale, 40..100, "${style.numberScale}%", step = 5) { set(style.copy(numberScale = it)) } }
+                item { SwitchRow("Corner shape", style.shape, summary = "A faint shape off the top corner, just for looks") { set(style.copy(shape = it)) } }
             }
 
             Group("On tap") {
@@ -180,7 +123,7 @@ fun WidgetEditor(day: Day?, rules: Rules) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
                 val mgr = remember { AppWidgetManager.getInstance(ctx) }
-                if (Widgets.ids(ctx).isEmpty() && android.os.Build.VERSION.SDK_INT >= 26 && mgr.isRequestPinAppWidgetSupported) {
+                if (Widgets.ids(ctx).isEmpty() && mgr.isRequestPinAppWidgetSupported) {
                     Button(onClick = { runCatching { mgr.requestPinAppWidget(Widgets.component(ctx), null, null) } }) {
                         Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(8.dp)); Text("Add to home screen")
                     }
@@ -207,8 +150,8 @@ fun WidgetEditor(day: Day?, rules: Rules) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
             title = { Text("Reset the widget?") },
-            text = { Text("Every look setting goes back to the default.") },
-            confirmButton = { TextButton(onClick = { set(Style()); confirmReset = false; scope.launch { fontTick++ } }) { Text("Reset") } },
+            text = { Text("Its look goes back to the default, fonts included.") },
+            confirmButton = { TextButton(onClick = { set(Style()); fontTick++; confirmReset = false }) { Text("Reset") } },
             dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel") } },
         )
     }
@@ -243,7 +186,7 @@ private fun Preview(style: Style, size: PreviewSize, day: Day, rules: Rules, fon
 
 @Composable
 private fun TextRow(title: String, value: String, onChange: (String) -> Unit) {
-    var text by remember { mutableStateOf(value) }
+    var text by remember(value) { mutableStateOf(value) }
     Pad {
         OutlinedTextField(
             value = text,
@@ -294,7 +237,7 @@ private fun FontSheet(title: String, spec: FontSpec, onApply: (FontSpec) -> Unit
         Column(Modifier.fillMaxHeight(0.9f).padding(horizontal = 20.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(14.dp))
-            Segmented(FontSource.entries, tab, { when (it) { FontSource.SYSTEM -> "System"; FontSource.GOOGLE -> "Google Fonts"; FontSource.FILE -> "File" } }) {
+            Segmented(FontSource.entries, tab, { when (it) { FontSource.SYSTEM -> "System"; FontSource.GOOGLE -> "Google"; FontSource.FILE -> "File" } }) {
                 tab = it; error = null
                 if (it == FontSource.SYSTEM && current.source != FontSource.SYSTEM) onApply(FontSpec(FontSource.SYSTEM, "sans-serif", current.weight))
             }

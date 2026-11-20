@@ -35,10 +35,6 @@ object Fmt {
                 else -> listOf("$h" to false, " hr " to true, "$r" to false, " min" to true)
             }
             NumberFormat.CLOCK -> listOf("%d:%02d".format(h, r) to false)
-            NumberFormat.DECIMAL -> if (h == 0L) listOf("$m" to false, "m" to true)
-                else listOf("%.1f".format(m / 60f) to false, "h" to true)
-            NumberFormat.MINUTES -> listOf("$m" to false, "m" to true)
-            NumberFormat.HOURS -> if (h == 0L) listOf("$m" to false, "m" to true) else listOf("$h" to false, "h" to true)
         }
     }
 
@@ -60,8 +56,22 @@ object Fmt {
 
     fun date(t: Long): String = SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(t))
 
+    /** When this day's count runs: "7:12 AM – 4:25 PM" (from waking up when sleep is left out). */
+    fun window(ctx: Context, day: Day): String {
+        val from = day.countFrom ?: day.start
+        val to = if (day.until >= day.end) "midnight" else time(ctx, day.until)
+        return (if (from == day.start) "Midnight" else time(ctx, from)) + " – " + to
+    }
+
     fun shareText(day: Day, rules: Rules): String =
         "${day.percent}% of your " + if (rules.sleep != SleepMode.OFF) "waking day" else "day"
+
+    /** A readable name for an app that isn't installed (or can't be looked up): com.instagram.android → Instagram. */
+    fun pkgName(pkg: String): String {
+        val skip = setOf("com", "org", "net", "android", "app", "apps", "mobile", "client", "lite", "google", "in", "co")
+        val part = pkg.split('.').lastOrNull { it.lowercase() !in skip } ?: pkg
+        return part.replaceFirstChar { it.uppercase() }
+    }
 
     fun minBreak(ms: Long): String = if (ms < 60_000) "${ms / 1000} s" else "${ms / 60_000} min"
 }

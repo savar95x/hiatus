@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget picker preview: the widget's darker default surface. -->
+    <color name="preview_bg">@android:color/system_surface_dark</color>
+    <color name="preview_number">@android:color/system_on_surface_dark</color>
+    <color name="preview_text">@android:color/system_on_surface_variant_dark</color>
+</resources>

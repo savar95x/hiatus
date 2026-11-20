@@ -12,6 +12,20 @@ object Sample {
     fun timeline(now: Long, days: Int = 14): Timeline {
         val use = ArrayList<Span>()
         val unlocks = ArrayList<Long>()
+        val apps = ArrayList<AppSpan>()
+        val firsts = ArrayList<Pair<Long, String>>()
+        val pool = listOf(
+            "com.instagram.android", "com.instagram.android", "com.instagram.android", "com.whatsapp", "com.whatsapp",
+            "com.whatsapp", "com.google.android.youtube", "com.google.android.youtube", "com.spotify.music",
+            "com.twitter.android", "com.android.chrome", "com.google.android.gm",
+        )
+        fun session(rnd: Random, a: Long, b: Long) {
+            val p1 = pool[rnd.nextInt(pool.size)]
+            firsts += a to p1
+            val mid = if (b - a > 4 * MIN && rnd.nextBoolean()) a + (b - a) / 2 else b
+            apps += AppSpan(p1, a + 2_000, mid)
+            if (mid < b) apps += AppSpan(pool[rnd.nextInt(pool.size)], mid, b)
+        }
         for (back in days downTo 0) {
             val d = Away.dayStart(now, -back)
             val rnd = Random(d / 86_400_000L)
@@ -20,12 +34,13 @@ object Sample {
             // A late-night check just after midnight, some nights.
             if (rnd.nextInt(3) == 0) {
                 val a = d + (10 + rnd.nextInt(30)) * MIN
-                use += Span(a, a + (3 + rnd.nextInt(9)) * MIN); unlocks += a
+                val e = a + (3 + rnd.nextInt(9)) * MIN
+                use += Span(a, e); unlocks += a; session(rnd, a, e)
             }
             while (t < sleepAt && t < now) {
                 val len = (1 + rnd.nextInt(if (rnd.nextInt(5) == 0) 35 else 9)) * MIN
                 val end = minOf(t + len, now)
-                use += Span(t, end); unlocks += t
+                use += Span(t, end); unlocks += t; session(rnd, t, end)
                 if (end >= now) break
                 val gap = when (rnd.nextInt(10)) {
                     in 0..4 -> 2 + rnd.nextInt(12)
@@ -36,7 +51,8 @@ object Sample {
             }
         }
         val inUse = use.lastOrNull()?.end == now
-        return Timeline(Away.dayStart(now, -days), now, Away.merge(use), unlocks.sorted().toLongArray(), inUse)
+        return Timeline(Away.dayStart(now, -days), now, Away.merge(use), unlocks.sorted().toLongArray(), inUse,
+            apps.sortedBy { it.start }, firsts.sortedBy { it.first })
     }
 
     fun week(rules: Rules, now: Long, weeks: Int = 0): List<Day> {

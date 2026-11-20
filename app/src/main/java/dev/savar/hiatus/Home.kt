@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,6 +30,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -108,6 +111,7 @@ fun HomeContent(data: HomeData?, rules: Rules, onWeek: (Int) -> Unit) {
             if (day.hasData) {
                 Breaks(day, rules, isToday)
                 CheckIns(day)
+                Apps(day)
             }
             Footnote(rules)
         }
@@ -127,26 +131,27 @@ private fun Hero(day: Day, rules: Rules, isToday: Boolean) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val share by animateFloatAsState(day.share, tween(900, easing = FastOutSlowInEasing), label = "share")
-    Surface(color = scheme.primaryContainer, shape = RoundedCornerShape(32.dp), modifier = Modifier.fillMaxWidth()) {
+    val sem = sem()
+    Surface(color = sem.awayContainer, shape = RoundedCornerShape(32.dp), modifier = Modifier.fillMaxWidth()) {
         Box {
             // A soft Material shape in the corner, the expressive touch.
             Box(
                 Modifier.align(Alignment.TopEnd).offset(x = 36.dp, y = (-34).dp).size(150.dp)
                     .clip(MaterialShapes.Cookie9Sided.toShape())
-                    .background(scheme.onPrimaryContainer.copy(alpha = 0.06f)),
+                    .background(sem.onAwayContainer.copy(alpha = 0.06f)),
             )
             Column(Modifier.padding(24.dp)) {
                 Text(
                     if (isToday) "Away today" else "Away",
                     style = MaterialTheme.typography.titleMedium,
-                    color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    color = sem.onAwayContainer.copy(alpha = 0.8f),
                 )
                 if (!day.hasData) {
                     Spacer(Modifier.height(8.dp))
-                    Text("No record for this day", style = MaterialTheme.typography.headlineSmall, color = scheme.onPrimaryContainer)
+                    Text("No record for this day", style = MaterialTheme.typography.headlineSmall, color = sem.onAwayContainer)
                     Text(
                         "The phone was off, or Hiatus couldn't see it yet.",
-                        style = MaterialTheme.typography.bodyMedium, color = scheme.onPrimaryContainer.copy(alpha = 0.75f),
+                        style = MaterialTheme.typography.bodyMedium, color = sem.onAwayContainer.copy(alpha = 0.75f),
                     )
                     return@Column
                 }
@@ -155,7 +160,7 @@ private fun Hero(day: Day, rules: Rules, isToday: Boolean) {
                         durText(m * 60_000),
                         style = MaterialTheme.typography.displayLarge,
                         fontWeight = FontWeight.Medium,
-                        color = scheme.onPrimaryContainer,
+                        color = sem.onAwayContainer,
                         maxLines = 1,
                     )
                 }
@@ -163,21 +168,14 @@ private fun Hero(day: Day, rules: Rules, isToday: Boolean) {
                 LinearWavyProgressIndicator(
                     progress = { share },
                     modifier = Modifier.fillMaxWidth(),
-                    color = scheme.primary,
-                    trackColor = scheme.onPrimaryContainer.copy(alpha = 0.14f),
+                    color = sem.away,
+                    trackColor = sem.onAwayContainer.copy(alpha = 0.14f),
                 )
                 Spacer(Modifier.height(14.dp))
-                Text(Fmt.shareText(day, rules), style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer)
-                val counted = day.counted
-                val sub = when {
-                    rules.sleep != SleepMode.OFF && counted.isNotEmpty() && day.sleep.isNotEmpty() ->
-                        "Counting " + Fmt.dur(day.countedMs) + " awake, sleep left out"
-                    isToday -> "Since midnight, " + Fmt.dur(day.countedMs) + " so far"
-                    else -> null
-                }
-                if (sub != null) {
-                    Text(sub, style = MaterialTheme.typography.bodyMedium, color = scheme.onPrimaryContainer.copy(alpha = 0.75f))
-                }
+                Text(Fmt.shareText(day, rules), style = MaterialTheme.typography.titleMedium, color = sem.onAwayContainer)
+                val sub = Fmt.window(ctx, day).let { if (isToday) it.replace(Fmt.time(ctx, day.until), "now") else it } +
+                    if (day.sleep.isNotEmpty()) ", sleep left out" else ""
+                Text(sub, style = MaterialTheme.typography.bodyMedium, color = sem.onAwayContainer.copy(alpha = 0.75f))
             }
         }
     }
@@ -191,9 +189,10 @@ private fun DayStrip(day: Day) {
     val scheme = MaterialTheme.colorScheme
     InfoCard("Through the day") {
         val span = (day.end - day.start).toFloat()
-        val away = scheme.primary
-        val track = scheme.surfaceContainerHighest
-        val sleepC = scheme.tertiary.copy(alpha = 0.45f)
+        val sem = sem()
+        val away = sem.away
+        val track = sem.use.copy(alpha = 0.85f)
+        val sleepC = sem.sleep.copy(alpha = 0.35f)
         val future = scheme.surfaceContainerHigh
         Canvas(Modifier.fillMaxWidth().height(44.dp)) {
             val r = CornerRadius(14.dp.toPx())
@@ -208,7 +207,7 @@ private fun DayStrip(day: Day) {
                     val step = 7.dp.toPx()
                     var hx = x(s.start) - size.height
                     while (hx < x(s.end)) {
-                        drawLine(scheme.tertiary.copy(alpha = 0.35f), Offset(hx, size.height), Offset(hx + size.height, 0f), 1.5.dp.toPx())
+                        drawLine(sleepC, Offset(hx, size.height), Offset(hx + size.height, 0f), 1.5.dp.toPx())
                         hx += step
                     }
                 }
@@ -230,9 +229,9 @@ private fun DayStrip(day: Day) {
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Legend(scheme.primary, "Away")
-            Legend(scheme.surfaceContainerHighest, "Phone in use")
-            if (day.sleep.isNotEmpty()) Legend(scheme.tertiary.copy(alpha = 0.6f), "Sleep")
+            Legend(sem().away, "Away")
+            Legend(sem().use, "Phone in use")
+            if (day.sleep.isNotEmpty()) Legend(sem().sleep, "Sleep")
         }
     }
 }
@@ -252,6 +251,7 @@ private fun Legend(c: Color, label: String) {
 private fun WeekCard(data: HomeData, sel: Int, onPick: (Int) -> Unit, onWeek: (Int) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
+    val sem = sem()
     val days = data.days
     val known = days.filter { it.hasData }
     val avg = if (known.isEmpty()) 0L else known.sumOf { it.awayMs } / known.size
@@ -289,8 +289,8 @@ private fun WeekCard(data: HomeData, sel: Int, onPick: (Int) -> Unit, onWeek: (I
                     val color by animateColorAsState(
                         when {
                             !d.hasData -> scheme.surfaceContainerHighest
-                            selected -> scheme.primary
-                            else -> scheme.secondaryContainer
+                            selected -> sem.away
+                            else -> sem.away.copy(alpha = 0.32f)
                         }, label = "barColor",
                     )
                     Column(
@@ -305,7 +305,7 @@ private fun WeekCard(data: HomeData, sel: Int, onPick: (Int) -> Unit, onWeek: (I
                         Text(
                             if (d.hasData) Fmt.dur(d.awayMs).substringBefore(' ') else "",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (selected) scheme.primary else scheme.onSurfaceVariant,
+                            color = if (selected) sem.away else scheme.onSurfaceVariant,
                             maxLines = 1,
                         )
                         Spacer(Modifier.height(4.dp))
@@ -317,7 +317,7 @@ private fun WeekCard(data: HomeData, sel: Int, onPick: (Int) -> Unit, onWeek: (I
                             Fmt.weekday(d.start).take(3),
                             style = MaterialTheme.typography.labelLarge,
                             color = when {
-                                selected -> scheme.primary
+                                selected -> sem.away
                                 d.isFuture -> scheme.onSurfaceVariant.copy(alpha = 0.5f)
                                 else -> scheme.onSurfaceVariant
                             },
@@ -336,8 +336,9 @@ private fun WeekCard(data: HomeData, sel: Int, onPick: (Int) -> Unit, onWeek: (I
 private fun Breaks(day: Day, rules: Rules, isToday: Boolean) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
+    val sem = sem()
     Section("Breaks") {
-    TileGrid(
+    TileGrid(sem.awayContainer, sem.onAwayContainer, 
         listOf(
             Tile(Icons.Rounded.Spa, "Longest", day.longest?.let { durText(it.ms) } ?: AnnotatedString("–"),
                 day.longest?.let { Fmt.span(ctx, it, day.ongoing && it == day.lastBreak) }, MaterialShapes.Cookie9Sided),
@@ -355,7 +356,7 @@ private fun Breaks(day: Day, rules: Rules, isToday: Boolean) {
     val buckets = day.breakBuckets()
     val total = buckets.sumOf { it.second }.coerceAtLeast(1)
     val names = listOf("Under 15m", "15m – 1h", "1 – 3h", "3h +")
-    val colors = listOf(scheme.secondaryContainer, scheme.secondary.copy(alpha = 0.6f), scheme.primary.copy(alpha = 0.75f), scheme.primary)
+    val colors = listOf(sem.away.copy(alpha = 0.3f), sem.away.copy(alpha = 0.5f), sem.away.copy(alpha = 0.75f), sem.away)
     InfoCard("Where the time went") {
         Row(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(50)), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             buckets.forEachIndexed { i, (_, ms) ->
@@ -382,8 +383,9 @@ private fun Breaks(day: Day, rules: Rules, isToday: Boolean) {
 private fun CheckIns(day: Day) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
+    val sem = sem()
     Section("Check-ins") {
-    TileGrid(
+    TileGrid(sem.useContainer, sem.onUseContainer, 
         listOf(
             Tile(Icons.Rounded.LockOpen, "Unlocks", AnnotatedString(day.unlocks.size.toString()), null, MaterialShapes.Cookie4Sided),
             Tile(Icons.Rounded.Schedule, "One every", if (day.unlocks.isEmpty()) AnnotatedString("–") else durText(day.unlockEveryMs),
@@ -403,7 +405,7 @@ private fun CheckIns(day: Day) {
                 Box(
                     Modifier.weight(1f).fillMaxHeight(if (n == 0) 0.04f else 0.12f + 0.88f * n / peak)
                         .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                        .background(if (n == peak && n > 0) scheme.primary else scheme.secondaryContainer),
+                        .background(if (n == peak && n > 0) sem.use else sem.use.copy(alpha = 0.4f)),
                 )
             }
         }
@@ -422,6 +424,87 @@ private fun CheckIns(day: Day) {
                 style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+// ------------------------------------------------------------------ apps
+
+@Composable
+private fun Apps(day: Day) {
+    if (day.apps.isEmpty()) return
+    val sem = sem()
+    Section("Apps") {
+        val top = day.apps.filter { it.ms > 0 }.take(5)
+        val max = top.maxOfOrNull { it.ms }?.coerceAtLeast(1) ?: 1
+        if (top.isNotEmpty()) InfoCard("Most used") {
+            top.forEach { a ->
+                AppRow(a.pkg, Fmt.dur(a.ms), if (a.opens == 1) "1 open" else "${a.opens} opens", a.ms.toFloat() / max, sem.use)
+            }
+        }
+        val pulls = day.apps.filter { it.firsts > 0 }.sortedByDescending { it.firsts }.take(3)
+        val unlocks = day.unlocks.size.coerceAtLeast(pulls.sumOf { it.firsts })
+        if (pulls.isNotEmpty()) InfoCard("Pulls you back") {
+            Text(
+                "The app you open first after unlocking: what ends your breaks.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            pulls.forEach { a ->
+                AppRow(a.pkg, "${a.firsts} of $unlocks", "unlocks", a.firsts.toFloat() / unlocks.coerceAtLeast(1), sem.use)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppRow(pkg: String, value: String, sub: String, frac: Float, color: Color) {
+    val ctx = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val label = remember(pkg) { appLabel(ctx, pkg) }
+    val icon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, pkg) {
+        value = withContext(Dispatchers.IO) { AppIcons.get(ctx, pkg) }
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        val ic = icon
+        if (ic != null) {
+            androidx.compose.foundation.Image(ic, null, Modifier.size(36.dp))
+        } else {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+                Text(label.take(1), style = MaterialTheme.typography.titleSmall)
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, modifier = Modifier.weight(1f))
+                Text(value, style = MaterialTheme.typography.titleSmall)
+            }
+            Spacer(Modifier.height(5.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(50)).background(scheme.surfaceContainerHighest)) {
+                    Box(Modifier.fillMaxWidth(frac.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(50)).background(color))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(sub, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** App icons for the Apps lists, loaded once. */
+internal object AppIcons {
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, androidx.compose.ui.graphics.ImageBitmap>()
+    private val missing = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
+    fun get(ctx: android.content.Context, pkg: String): androidx.compose.ui.graphics.ImageBitmap? {
+        cache[pkg]?.let { return it }
+        if (pkg in missing) return null
+        val px = (36 * ctx.resources.displayMetrics.density).toInt()
+        val bmp = runCatching {
+            ctx.packageManager.getApplicationIcon(pkg).toBitmap(px, px)
+        }.getOrNull()
+        if (bmp == null) { missing += pkg; return null }
+        return bmp.asImageBitmap().also { cache[pkg] = it }
     }
 }
 
@@ -472,7 +555,7 @@ private class Tile(
 )
 
 @Composable
-private fun TileGrid(tiles: List<Tile>) {
+private fun TileGrid(container: Color, onContainer: Color, tiles: List<Tile>) {
     val scheme = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         tiles.chunked(2).forEachIndexed { row, pair ->
@@ -488,9 +571,9 @@ private fun TileGrid(tiles: List<Tile>) {
                     Surface(color = scheme.surfaceContainer, shape = shape, modifier = Modifier.weight(1f).fillMaxHeight()) {
                         Column(Modifier.padding(18.dp)) {
                             Box(
-                                Modifier.size(40.dp).clip(t.shape.toShape()).background(scheme.secondaryContainer),
+                                Modifier.size(40.dp).clip(t.shape.toShape()).background(container),
                                 contentAlignment = Alignment.Center,
-                            ) { Icon(t.icon, null, tint = scheme.onSecondaryContainer, modifier = Modifier.size(20.dp)) }
+                            ) { Icon(t.icon, null, tint = onContainer, modifier = Modifier.size(20.dp)) }
                             Spacer(Modifier.height(14.dp))
                             Text(t.title, style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
                             Text(t.value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium, maxLines = 1)

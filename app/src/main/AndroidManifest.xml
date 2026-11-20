@@ -9,11 +9,15 @@
     <!-- Google Fonts for the widget's number font. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Launchable apps: for "tap the widget to open an app". -->
+    <!-- Launchable apps (names and icons in Apps, "tap to open an app"); home screens, left out of Apps. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
     </queries>
 
