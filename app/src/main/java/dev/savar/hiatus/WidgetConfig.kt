@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 enum class WidgetStyle(val label: String) {
+    AWAY("Away"),
     HERO("Number"),
     RING("Ring"),
     SHAPE("Shape"),
@@ -17,8 +18,8 @@ enum class WidgetStyle(val label: String) {
 /** Everything a widget can show as a number. */
 /** [away]: the app's main subject; these are offered first, the rest under "More stats". */
 enum class Metric(val label: String, val short: String, val away: Boolean = false) {
-    LAST_AWAY("Last away", "Away", away = true),
     AWAY_TODAY("Away today", "Away", away = true),
+    LAST_AWAY("Last away", "Last away", away = true),
     SCREEN_TIME("Screen time", "Screen"),
     UNLOCKS("Unlocks", "Unlocks"),
     PICKUPS("Screen wakes", "Wakes"),
@@ -87,13 +88,14 @@ enum class ShapeKind(val label: String) {
 enum class TapAction(val label: String) {
     HIATUS("Hiatus"),
     APP("App…"),
-    NONE("None"),
+    REFRESH("Refresh"),
 }
 
 data class WidgetConfig(
-    val style: WidgetStyle = WidgetStyle.HERO,
-    val metric: Metric = Metric.LAST_AWAY,
-    val stats: List<Metric> = listOf(Metric.AWAY_TODAY, Metric.LONGEST_AWAY, Metric.UNLOCKS, Metric.SCREEN_TIME),
+    val style: WidgetStyle = WidgetStyle.AWAY,
+    val metric: Metric = Metric.AWAY_TODAY,
+    val stats: List<Metric> = listOf(Metric.LONGEST_AWAY, Metric.LAST_AWAY, Metric.UNLOCKS, Metric.SCREEN_TIME),
+    val decoration: Boolean = true, // Away style: a soft Material shape tucked into the corner
     val showLabel: Boolean = true,
     val customLabel: String = "",
     val uppercaseLabel: Boolean = false,
@@ -153,6 +155,7 @@ data class WidgetConfig(
         put("goalMinutes", goalMinutes)
         put("wavy", wavy)
         put("shape", shape.name)
+        put("decoration", decoration)
         put("appsCount", appsCount)
         put("tapAction", tapAction.name)
         put("tapPackage", tapPackage)
@@ -201,6 +204,7 @@ data class WidgetConfig(
                     goalMinutes = o.optInt("goalMinutes", d.goalMinutes),
                     wavy = o.optBoolean("wavy", d.wavy),
                     shape = enumOr(o.optString("shape"), d.shape),
+                    decoration = o.optBoolean("decoration", d.decoration),
                     appsCount = o.optInt("appsCount", d.appsCount),
                     tapAction = enumOr(o.optString("tapAction"), d.tapAction),
                     tapPackage = o.optString("tapPackage", d.tapPackage),

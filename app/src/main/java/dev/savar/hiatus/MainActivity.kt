@@ -344,7 +344,7 @@ private fun Root(launchId: Int) {
                     Crossfade(targetState = tab, animationSpec = tween(220), label = "tab") { shown ->
                         when (shown) {
                             Tab.TODAY -> TodayScreen(report, granted, refreshing, onRefresh = { load(true) }, onOpenSettings = { settings = true })
-                            Tab.WIDGETS -> WidgetEditor(launchId, report)
+                            Tab.WIDGETS -> WidgetEditor(launchId, report, onOpenSettings = { settings = true })
                         }
                     }
                 }

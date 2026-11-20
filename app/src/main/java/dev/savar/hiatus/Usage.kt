@@ -32,7 +32,11 @@ data class DayStats(
     val pickups: Int,       // screen turned on (incl. glances without unlocking)
     val hourly: LongArray,  // screen time per hour of day
     val apps: List<AppUsage>,
+    val use: List<Iv> = emptyList(), // stretches the phone was in use, clipped to the day
 ) {
+    /** Share of the day so far spent away, 0–100. */
+    val awayPct: Int get() = if (end <= start) 0 else ((awayMs * 100) / (end - start)).toInt()
+
     val avgSessionMs: Long get() = if (sessions == 0) 0 else inUseMs / sessions
 }
 
@@ -229,6 +233,11 @@ object Usage {
             pickups = tl.wakes.count { it in a until end },
             hourly = hourly,
             apps = apps,
+            use = tl.sessions.mapNotNull { iv ->
+                val s = max(iv.s, a)
+                val e = min(iv.e, end)
+                if (e > s) Iv(s, e) else null
+            },
         )
     }
 
@@ -319,7 +328,7 @@ object Metrics {
                     else -> Fmt.time(ctx, a.start) + " – " + Fmt.time(ctx, a.end)
                 }
             }
-            Metric.AWAY_TODAY -> "longest " + Fmt.dur(t.longestAwayMs, f)
+            Metric.AWAY_TODAY -> "${t.awayPct}% of your day"
             Metric.SCREEN_TIME -> "${t.unlocks} unlocks"
             Metric.UNLOCKS -> if (t.unlocks == 0) "today" else "every " + Fmt.dur((t.end - t.start) / t.unlocks, f)
             Metric.PICKUPS -> "${t.unlocks} unlocked"

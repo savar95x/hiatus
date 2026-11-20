@@ -84,6 +84,7 @@ class Screenshots {
                 start = start, end = end, screenTimeMs = st, inUseMs = st + 9 * m, awayMs = (end - start) - st - 9 * m,
                 longestAwayMs = 7 * h + 12 * m, sessions = (46 * scale).toInt(), unlocks = (58 * scale).toInt(),
                 pickups = (74 * scale).toInt(), hourly = LongArray(24) { (pattern[it] * scale * m).toLong() }, apps = apps,
+                use = fakeUse(start, end, LongArray(24) { (pattern[it] * scale).toLong() }),
             )
         }
         val scales = listOf(1.2f, 0.8f, 1.5f, 0.6f, 1.1f, 1.35f, 1f)

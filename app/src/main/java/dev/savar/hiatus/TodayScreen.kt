@@ -356,18 +356,24 @@ internal fun openUsageAccess(ctx: Context) {
 private fun HeroCard(r: Report) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
+    val t = r.today
     val a = r.away
     val spin = rememberInfiniteTransition(label = "spin")
     val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(24_000, easing = LinearEasing), RepeatMode.Restart), label = "angle")
     Surface(color = scheme.primaryContainer, shape = RoundedCornerShape(32.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (a?.ongoing == true) "Away now" else "Last away",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
-                )
-                AnimatedContent(Fmt.dur(a?.ms ?: 0), label = "away") { v ->
+        Box {
+            // The same soft corner shape as the Away widget.
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(x = 56.dp, y = (-56).dp).size(190.dp).rotate(angle)
+                    .clip(MaterialShapes.Cookie9Sided.toShape()).background(scheme.onPrimaryContainer.copy(alpha = 0.06f)),
+            )
+            Column(Modifier.padding(24.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(scheme.primary))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Away today", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer.copy(alpha = 0.8f))
+                }
+                AnimatedContent(Fmt.dur(t.awayMs), label = "away") { v ->
                     Text(
                         richDuration(v),
                         style = MaterialTheme.typography.displayLarge,
@@ -376,29 +382,49 @@ private fun HeroCard(r: Report) {
                         maxLines = 1,
                     )
                 }
+                Spacer(Modifier.height(12.dp))
+                DayTimeline(t, scheme.primary, scheme.onPrimaryContainer.copy(alpha = 0.18f), Modifier.fillMaxWidth().height(10.dp))
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("12 AM", "6 AM", "12 PM", "6 PM").forEach {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = scheme.onPrimaryContainer.copy(alpha = 0.6f), modifier = Modifier.weight(1f))
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
                 Text(
-                    when {
-                        a == null -> "No break yet today"
-                        a.ongoing -> "Since " + Fmt.time(ctx, a.start)
-                        else -> Fmt.time(ctx, a.start) + " – " + Fmt.time(ctx, a.end)
-                    },
+                    "${t.awayPct}% of your day  ·  longest ${Fmt.dur(t.longestAwayMs)}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = scheme.onPrimaryContainer,
                 )
-                Spacer(Modifier.height(10.dp))
                 Text(
-                    "Away today ${Fmt.dur(r.today.awayMs)}  ·  longest ${Fmt.dur(r.today.longestAwayMs)}",
+                    when {
+                        a == null -> "No break yet"
+                        a.ongoing -> "Away now since " + Fmt.time(ctx, a.start)
+                        else -> "Last break " + Fmt.dur(a.ms) + ", " + Fmt.time(ctx, a.start) + " – " + Fmt.time(ctx, a.end)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onPrimaryContainer.copy(alpha = 0.75f),
                 )
             }
-            Spacer(Modifier.width(12.dp))
-            Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier.fillMaxSize().rotate(angle).clip(MaterialShapes.SoftBurst.toShape()).background(scheme.primary),
-                )
-                Icon(Icons.Rounded.SelfImprovement, null, tint = scheme.onPrimary, modifier = Modifier.size(36.dp))
-            }
+        }
+    }
+}
+
+/** Midnight to midnight: away so far filled, phone use as gaps, the rest of the day faint. */
+@Composable
+private fun DayTimeline(day: DayStats, away: Color, rest: Color, modifier: Modifier) {
+    val grow = remember(day.start) { Animatable(0f) }
+    LaunchedEffect(day.start) { grow.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
+    Canvas(modifier.clip(RoundedCornerShape(50))) {
+        val start = day.start
+        val span = (Usage.dayStart(start, 1) - start).toFloat().coerceAtLeast(1f)
+        fun x(t: Long) = ((t - start) / span).coerceIn(0f, 1f) * size.width
+        drawRect(rest)
+        drawRect(away, size = Size(x(day.end) * grow.value, size.height))
+        for (iv in day.use) {
+            val x0 = x(iv.s)
+            if (x0 > x(day.end) * grow.value) continue
+            drawRect(rest, topLeft = Offset(x0, 0f), size = Size(maxOf(x(iv.e) - x0, 1.5.dp.toPx()), size.height))
         }
     }
 }

@@ -264,6 +264,22 @@ private fun matches(cfg: WidgetConfig, preset: Preset): Boolean =
 private fun applyPreset(cfg: WidgetConfig, preset: Preset): WidgetConfig =
     preset.config.copy(font = cfg.font, fontForLabels = cfg.fontForLabels, tapAction = cfg.tapAction, tapPackage = cfg.tapPackage)
 
+/** Phone-use stretches matching an hourly minutes pattern: a couple of sessions inside each busy hour. */
+internal fun fakeUse(start: Long, end: Long, minutesPerHour: LongArray): List<Iv> {
+    val out = ArrayList<Iv>()
+    for (h in 0 until 24) {
+        val mins = minutesPerHour[h]
+        if (mins <= 0) continue
+        val hs = start + h * 3_600_000L
+        val a = hs + 6 * 60_000L
+        val first = (mins * 0.6).toLong()
+        out.add(Iv(a, a + first * 60_000L))
+        val b = hs + 38 * 60_000L
+        out.add(Iv(b, b + (mins - first) * 60_000L))
+    }
+    return out.filter { it.s < end }.map { Iv(it.s, minOf(it.e, end)) }
+}
+
 /** Plausible numbers so previews look right before usage access is granted. */
 internal fun sampleReport(ctx: Context): Report {
     val now = System.currentTimeMillis()
@@ -282,6 +298,7 @@ internal fun sampleReport(ctx: Context): Report {
     val day = DayStats(
         start = start, end = now, screenTimeMs = 3 * h + 41 * m, inUseMs = 3 * h + 52 * m, awayMs = 9 * h + 20 * m,
         longestAwayMs = 7 * h + 12 * m, sessions = 46, unlocks = 58, pickups = 74, hourly = hourly, apps = apps,
+        use = fakeUse(start, now, hourly.map { it / m }.toLongArray()),
     )
     return Report(now, Away(2 * h + 13 * m, now - 2 * h - 23 * m, now - 10 * m, false), listOf(day))
 }
@@ -297,7 +314,7 @@ private fun fontName(cfg: WidgetConfig): String {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
+fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null, onOpenSettings: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
@@ -360,6 +377,9 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                     },
                     actions = {
                         if (onDone != null) Button(onClick = onDone, modifier = Modifier.padding(end = 12.dp)) { Text("Done") }
+                        else if (shown == null && onOpenSettings != null) IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+                        }
                     },
                     scrollBehavior = scroll,
                     // The preview stays pinned, so nothing scrolls under the bar.
@@ -425,7 +445,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                             SectionTitle("Looks")
                             looks(Presets.away)
                             var moreLooks by rememberSaveable { mutableStateOf(Presets.more.any { matches(cfg, it) }) }
-                            ShowMore("More looks", "Screen time, tiles, chart, apps", moreLooks) { moreLooks = !moreLooks }
+                            ShowMore("More looks", "Last away, screen time, tiles, chart, apps", moreLooks) { moreLooks = !moreLooks }
                             AnimatedVisibility(moreLooks) {
                                 Column(verticalArrangement = Arrangement.spacedBy(20.dp)) { looks(Presets.more) }
                             }
@@ -440,7 +460,7 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                                 item {
                                     val v = when (cfg.tapAction) {
                                         TapAction.APP -> if (cfg.tapPackage.isEmpty()) "App" else remember(cfg.tapPackage) { appLabel(ctx, cfg.tapPackage) }
-                                        TapAction.NONE -> "Nothing"
+                                        TapAction.REFRESH -> "Refresh widget"
                                         TapAction.HIATUS -> "Open Hiatus"
                                     }
                                     NavRow(Icons.Rounded.TouchApp, "On tap", v) { page = EditorPage.TAP }
@@ -597,6 +617,14 @@ fun WidgetEditor(launchId: Int, report: Report?, onDone: (() -> Unit)? = null) {
                                         }
                                     }
                                     item { SwitchRow("Wavy", cfg.wavy) { update(cfg.copy(wavy = it)) } }
+                                }
+                                WidgetStyle.AWAY -> Group("Decoration") {
+                                    item {
+                                        SwitchRow("Corner shape", cfg.decoration, summary = "A soft shape tucked into the corner") {
+                                            update(cfg.copy(decoration = it))
+                                        }
+                                    }
+                                    if (cfg.decoration) item { Pad { ShapePicker(cfg.shape) { update(cfg.copy(shape = it)) } } }
                                 }
                                 WidgetStyle.SHAPE -> Group("Shape") {
                                     item { Pad { ShapePicker(cfg.shape) { update(cfg.copy(shape = it)) } } }

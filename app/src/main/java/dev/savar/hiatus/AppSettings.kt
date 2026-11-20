@@ -290,8 +290,8 @@ fun AppSettingsScreen(granted: Boolean, onBack: () -> Unit, onTrackingChanged: (
                 }
                 item {
                     SwitchRow(
-                        "Pure black", ThemePrefs.pureBlack && dark, enabled = dark,
-                        summary = if (dark) "Black background for AMOLED screens" else "Available in dark theme",
+                        "Pure black", ThemePrefs.pureBlack,
+                        summary = if (dark) "True black for AMOLED screens" else "True black whenever the app is dark",
                     ) { ThemePrefs.setPureBlack(ctx, it) }
                 }
             }

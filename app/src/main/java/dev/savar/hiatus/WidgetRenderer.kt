@@ -271,6 +271,19 @@ object WidgetRenderer {
             c.drawRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), rad, rad, bg)
         }
 
+        if (cfg.style == WidgetStyle.AWAY && cfg.decoration && report != null) {
+            // A soft Material shape tucked into the top-right corner, a tone off the background.
+            val s = min(w, h) * 1.15f
+            val box = RectF(w - s * 0.6f, -s * 0.4f, w + s * 0.4f, s * 0.6f)
+            val path = shapePath(cfg.shape, box)
+            path.transform(Matrix().apply { setRotate(18f, box.centerX(), box.centerY()) })
+            val rad = min(cfg.cornerRadius * d, min(w, h) / 2f)
+            c.save()
+            c.clipPath(Path().apply { addRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), rad, rad, Path.Direction.CW) })
+            c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = p.tile })
+            c.restore()
+        }
+
         // Material widget padding: 16dp, a little less on the smallest sizes.
         val pad = (if (min(wDp, hDp) < 130) 14f else 16f) * d
         val area = RectF(pad, pad, w - pad, h - pad)
@@ -285,6 +298,7 @@ object WidgetRenderer {
         val caption = Metrics.caption(ctx, cfg.metric, report, cfg.format)
 
         when (cfg.style) {
+            WidgetStyle.AWAY -> away(c, area, d, cfg, p, f, report, value, caption, center)
             WidgetStyle.HERO -> hero(c, area, d, cfg, p, f, value, cfg.label(), caption, center)
             WidgetStyle.RING -> ring(c, area, d, cfg, p, f, report, value, caption, center)
             WidgetStyle.SHAPE -> shape(c, area, d, cfg, p, f, report, value, caption)
@@ -330,6 +344,73 @@ object WidgetRenderer {
             numberAt(c, value, r, numBase, size, cfg, f, p.number, false)
             if (showCaption) line(c, caption, r, capBase, cp, false)
         }
+    }
+
+    /**
+     * The signature look: label, the big number, and a day-long timeline underneath where away time is filled
+     * and phone use shows as gaps. Caption (share of the day) and the longest break sit below.
+     */
+    private fun away(
+        c: Canvas, r: RectF, d: Float, cfg: WidgetConfig, p: Palette, f: Fonts,
+        report: Report, value: String, caption: String, center: Boolean,
+    ) {
+        val day = report.today
+        val small = (min(r.width(), r.height()) * 0.1f).coerceIn(11f * d, 14f * d)
+        val showLabel = cfg.showLabel && r.height() > 56 * d
+        val showCaption = cfg.showCaption && r.height() > 100 * d
+        val barH = (r.height() * 0.075f).coerceIn(6f * d, 12f * d)
+        var bottom = r.bottom
+        if (showCaption) {
+            val base = r.bottom - small * 0.2f
+            val cp = paint(small, p.sub, f.body)
+            val wide = r.width() > 220 * d && cfg.metric != Metric.LONGEST_AWAY
+            if (wide) {
+                val right = "Longest " + Fmt.dur(day.longestAwayMs, cfg.format)
+                line(c, right, r, base, cp, false, end = true)
+                line(c, caption, RectF(r.left, 0f, r.right - cp.measureText(right) - 12 * d, 0f), base, cp, false)
+            } else {
+                line(c, caption, r, base, cp, center)
+            }
+            bottom -= small * 1.75f
+        }
+        val barTop = bottom - barH
+        timeline(c, RectF(r.left, barTop, r.right, bottom), d, p, day)
+
+        val top = r.top + if (showLabel) small * 1.9f else 0f
+        val numBase = barTop - max(10f * d, small * 0.9f)
+        val size = fitSize(value, r.width(), numBase - top, cfg, f, maxCap = min(r.width(), r.height()) * 0.38f)
+        numberAt(c, value, r, numBase, size, cfg, f, p.number, center)
+        if (showLabel) {
+            // A small dot in the accent colour leads the label.
+            val lp = paint(small, p.sub, f.label).apply { if (cfg.uppercaseLabel) letterSpacing = 0.08f }
+            val label = cfg.label()
+            val dot = small * 0.32f
+            val lw = lp.measureText(label) + dot * 2 + small * 0.5f
+            val x0 = if (center) r.centerX() - lw / 2 else r.left
+            c.drawCircle(x0 + dot, r.top + small * 0.62f, dot, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = p.number })
+            line(c, label, RectF(x0 + dot * 2 + small * 0.5f, 0f, r.right, 0f), r.top + small, lp, false)
+        }
+    }
+
+    /** Midnight to midnight: away so far filled, phone use as gaps, the rest of the day faint. */
+    private fun timeline(c: Canvas, b: RectF, d: Float, p: Palette, day: DayStats) {
+        val start = day.start
+        val span = (Usage.dayStart(start, 1) - start).toFloat().coerceAtLeast(1f)
+        fun x(t: Long) = b.left + ((t - start) / span).coerceIn(0f, 1f) * b.width()
+        val rad = b.height() / 2
+        c.save()
+        c.clipPath(Path().apply { addRoundRect(b, rad, rad, Path.Direction.CW) })
+        val pt = Paint(Paint.ANTI_ALIAS_FLAG)
+        pt.color = alpha(p.track, 0.5f)
+        c.drawRect(b, pt)
+        pt.color = p.number
+        c.drawRect(b.left, b.top, x(day.end), b.bottom, pt)
+        pt.color = p.track
+        for (iv in day.use) {
+            val x0 = x(iv.s)
+            c.drawRect(x0, b.top, max(x(iv.e), x0 + 1.5f * d), b.bottom, pt)
+        }
+        c.restore()
     }
 
     /** Screen time against the daily goal. Wide widgets show the chosen stat beside the ring. */

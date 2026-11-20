@@ -156,6 +156,7 @@ object Widgets {
         if (wDp <= 0 || hDp <= 0) {
             val (dw, dh) = when (style) {
                 WidgetStyle.HERO, WidgetStyle.RING, WidgetStyle.SHAPE -> 170 to 170
+                WidgetStyle.AWAY -> 340 to 170
                 WidgetStyle.TILES, WidgetStyle.CHART -> 340 to 170
                 WidgetStyle.APPS -> 340 to 250
                 WidgetStyle.DASHBOARD -> 340 to 340
@@ -257,7 +258,11 @@ object Widgets {
             TapAction.APP -> ctx.packageManager.getLaunchIntentForPackage(cfg.tapPackage)?.let {
                 PendingIntent.getActivity(ctx, id * 4 + 2, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
             } ?: open
-            TapAction.NONE -> null
+            TapAction.REFRESH -> PendingIntent.getBroadcast(
+                ctx, id * 4 + 3,
+                Intent(ctx, HiatusWidget::class.java).setAction(HiatusWidget.ACTION_REFRESH),
+                flags,
+            )
         }
     }
 }

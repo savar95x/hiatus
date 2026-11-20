@@ -6,20 +6,21 @@ data class Preset(val name: String, val config: WidgetConfig)
 object Presets {
     /** Away time is what Hiatus is for: these lead. */
     val away: List<Preset> = listOf(
-        Preset("Away", WidgetConfig(style = WidgetStyle.HERO, metric = Metric.LAST_AWAY, role = ColorRole.PRIMARY)),
-        Preset("Cookie", WidgetConfig(style = WidgetStyle.SHAPE, metric = Metric.LAST_AWAY, role = ColorRole.TERTIARY, background = false)),
-        Preset("Midnight", WidgetConfig(style = WidgetStyle.HERO, metric = Metric.LAST_AWAY, role = ColorRole.BLACK)),
+        Preset("Away", WidgetConfig(style = WidgetStyle.AWAY, metric = Metric.AWAY_TODAY, role = ColorRole.PRIMARY)),
+        Preset("Midnight", WidgetConfig(style = WidgetStyle.AWAY, metric = Metric.AWAY_TODAY, role = ColorRole.BLACK, shape = ShapeKind.SOFT_BURST)),
+        Preset("Cookie", WidgetConfig(style = WidgetStyle.SHAPE, metric = Metric.AWAY_TODAY, role = ColorRole.TERTIARY, background = false)),
         Preset(
             "Away + day",
             WidgetConfig(
-                style = WidgetStyle.DASHBOARD, metric = Metric.LAST_AWAY, role = ColorRole.SURFACE,
-                stats = listOf(Metric.AWAY_TODAY, Metric.LONGEST_AWAY, Metric.UNLOCKS),
+                style = WidgetStyle.DASHBOARD, metric = Metric.AWAY_TODAY, role = ColorRole.SURFACE,
+                stats = listOf(Metric.LONGEST_AWAY, Metric.LAST_AWAY, Metric.UNLOCKS),
             ),
         ),
     )
 
-    /** Screen-time looks, one tap further. */
+    /** Last break and screen-time looks, one tap further. */
     val more: List<Preset> = listOf(
+        Preset("Last away", WidgetConfig(style = WidgetStyle.HERO, metric = Metric.LAST_AWAY, role = ColorRole.PRIMARY)),
         Preset("Goal ring", WidgetConfig(style = WidgetStyle.RING, metric = Metric.SCREEN_TIME, role = ColorRole.SURFACE)),
         Preset(
             "Glance",
