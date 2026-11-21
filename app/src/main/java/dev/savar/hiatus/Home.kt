@@ -91,7 +91,6 @@ fun HomeContent(data: HomeData?, rules: Rules, onWeek: (Int) -> Unit) {
                 scrollBehavior = scroll,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
             )
         },
