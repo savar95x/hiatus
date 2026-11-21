@@ -129,7 +129,6 @@ fun WidgetEditor(day: Day?, rules: Rules) {
                     scrollBehavior = scroll,
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
                     ),
                 )
             },
@@ -184,12 +183,12 @@ private fun MainList(style: Style, day: Day, rules: Rules, fontTick: Int, size: 
     val ctx = LocalContext.current
     Preview(style, size, day, rules, fontTick, 220.dp)
     Group {
-        item { NavRow("Text", textSummary(style), onClick = { open(Page.TEXT) }) }
-        item { NavRow("Fonts", fontsSummary(style), onClick = { open(Page.FONTS) }) }
-        item { NavRow("Look", lookSummary(style), onClick = { open(Page.LOOK) }) }
+        item { NavRow("Text", textSummary(style), Icons.Rounded.TextFields, onClick = { open(Page.TEXT) }) }
+        item { NavRow("Fonts", fontsSummary(style), Icons.Rounded.FontDownload, onClick = { open(Page.FONTS) }) }
+        item { NavRow("Look", lookSummary(style), Icons.Rounded.Palette, onClick = { open(Page.LOOK) }) }
         item {
             NavRow("On tap", if (style.tap == Tap.APP && style.tapPackage.isNotBlank()) "Open " + appLabel(ctx, style.tapPackage) else style.tap.title,
-                onClick = { open(Page.TAP) })
+                Icons.Rounded.TouchApp, onClick = { open(Page.TAP) })
         }
     }
     val mgr = remember { AppWidgetManager.getInstance(ctx) }
@@ -229,12 +228,12 @@ private fun lookSummary(s: Style) = listOfNotNull(
 @Composable
 private fun TextPage(style: Style, set: (Style) -> Unit) {
     Group {
-        item { SwitchRow("Label", style.showLabel) { set(style.copy(showLabel = it)) } }
+        item { SwitchRow("Label", style.showLabel, icon = Icons.Rounded.Title) { set(style.copy(showLabel = it)) } }
         if (style.showLabel) item { TextRow("Label text", style.label) { set(style.copy(label = it)) } }
     }
     Group {
-        item { ChoiceRow("Number", NumberFormat.entries, style.format, { it.title }) { set(style.copy(format = it)) } }
-        item { ChoiceRow("Below the number", Caption.entries, style.caption, { it.title }) { set(style.copy(caption = it)) } }
+        item { ChoiceRow("Number", NumberFormat.entries, style.format, { it.title }, icon = Icons.Rounded.Timer) { set(style.copy(format = it)) } }
+        item { ChoiceRow("Below the number", Caption.entries, style.caption, { it.title }, icon = Icons.Rounded.Subtitles) { set(style.copy(caption = it)) } }
     }
 }
 
@@ -258,12 +257,12 @@ private fun FontGroup(
     Group(part.title) {
         item {
             NavRow("Typeface", if (loader.busy != null && spec.source == FontSource.GOOGLE) "Downloading ${loader.busy}…" else spec.title,
-                onClick = { open(typefacePage) })
+                Icons.Rounded.FontDownload, onClick = { open(typefacePage) })
         }
         item {
             Pad {
                 if (spec.source != FontSource.FILE) {
-                    SliderLabel("Weight", weightName(weight.roundToInt()))
+                    SliderLabel(Icons.Rounded.LineWeight, "Weight", weightName(weight.roundToInt()))
                     Slider(
                         value = weight,
                         onValueChange = { weight = it },
@@ -273,7 +272,7 @@ private fun FontGroup(
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-                SliderLabel("Size", sizeText(sizeValue))
+                SliderLabel(Icons.Rounded.FormatSize, "Size", sizeText(sizeValue))
                 Slider(
                     value = sizeValue.toFloat(),
                     onValueChange = { v ->
@@ -292,11 +291,9 @@ private fun FontGroup(
 }
 
 @Composable
-private fun SliderLabel(title: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-    }
+private fun SliderLabel(icon: ImageVector, title: String, value: String) {
+    IconTitle(icon, title) { Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+    Spacer(Modifier.height(4.dp))
 }
 
 @Composable
@@ -304,7 +301,7 @@ private fun LookPage(style: Style, set: (Style) -> Unit) {
     Group {
         item {
             Pad {
-                Text("Theme", style = MaterialTheme.typography.bodyLarge)
+                IconTitle(Icons.Rounded.DarkMode, "Theme")
                 Spacer(Modifier.height(10.dp))
                 Segmented(ThemeMode.entries, style.theme, {
                     when (it) { ThemeMode.AUTO -> "Auto"; ThemeMode.LIGHT -> "Light"; ThemeMode.DARK -> "Dark" }
@@ -313,12 +310,12 @@ private fun LookPage(style: Style, set: (Style) -> Unit) {
         }
         item {
             Pad {
-                Text("Background", style = MaterialTheme.typography.bodyLarge)
+                IconTitle(Icons.Rounded.Wallpaper, "Background")
                 Spacer(Modifier.height(10.dp))
                 Segmented(Background.entries, style.background, { it.title }) { set(style.copy(background = it)) }
             }
         }
-        item { SwitchRow("Clock", style.clock, summary = "A thin clock in the corner, just for looks") { set(style.copy(clock = it)) } }
+        item { SwitchRow("Clock", style.clock, summary = "A thin clock in the corner, just for looks", icon = Icons.Rounded.Schedule) { set(style.copy(clock = it)) } }
     }
 }
 
@@ -326,9 +323,9 @@ private fun LookPage(style: Style, set: (Style) -> Unit) {
 private fun TapPage(style: Style, set: (Style) -> Unit, pickApp: () -> Unit) {
     val ctx = LocalContext.current
     Group {
-        item { ChoiceRow(null, Tap.entries, style.tap, { it.title }) { set(style.copy(tap = it)); if (it == Tap.APP && style.tapPackage.isBlank()) pickApp() } }
+        item { ChoiceRow("When you tap the widget", Tap.entries, style.tap, { it.title }, icon = Icons.Rounded.TouchApp) { set(style.copy(tap = it)); if (it == Tap.APP && style.tapPackage.isBlank()) pickApp() } }
         if (style.tap == Tap.APP) item {
-            NavRow("App", if (style.tapPackage.isBlank()) "Choose" else appLabel(ctx, style.tapPackage), onClick = pickApp)
+            NavRow("App", if (style.tapPackage.isBlank()) "Choose" else appLabel(ctx, style.tapPackage), Icons.Rounded.Apps, onClick = pickApp)
         }
     }
 }

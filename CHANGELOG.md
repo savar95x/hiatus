@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.11.2] - 2026-11-21
+- Widget tab: icons on every setting (Text, Fonts, Look, On tap, and the rows inside them).
+- The top bar now takes Material's tinted surface colour once the page scrolls under it, on all three tabs.
+
 ## [0.11.1] - 2026-11-20
 - Apps lists: lighter bars. They're now Material 3's own thin progress indicator, and each app's colour is a
   soft tint of its icon's hue instead of a strong stripe.

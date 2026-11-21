@@ -96,7 +96,18 @@ internal fun Group(title: String? = null, modifier: Modifier = Modifier, build: 
 /** Free-form content inside a group row. */
 @Composable
 internal fun Pad(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), content = content)
+    // Same insets as ListItem (16 start, 24 end), so icons and titles line up across all rows.
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 24.dp, top = 16.dp, bottom = 16.dp), content = content)
+}
+
+/** A row title with its round icon, as in ListItem; [trailing] sits at the end (e.g. a slider's value). */
+@Composable
+internal fun IconTitle(icon: ImageVector?, title: String, trailing: (@Composable () -> Unit)? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) { RowIcon(icon); Spacer(Modifier.width(16.dp)) }
+        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        trailing?.invoke()
+    }
 }
 
 @Composable
@@ -166,9 +177,9 @@ internal fun SliderRow(title: String, value: Int, range: IntRange, valueText: St
 /** A titled row of single-choice chips that wrap. */
 @Composable
 internal fun <T> ChoiceRow(title: String?, options: List<T>, selected: T, label: (T) -> String,
-                           summary: String? = null, onSelect: (T) -> Unit) {
+                           summary: String? = null, icon: ImageVector? = null, onSelect: (T) -> Unit) {
     Pad {
-        if (title != null) Text(title, style = MaterialTheme.typography.bodyLarge)
+        if (title != null) IconTitle(icon, title)
         if (summary != null) {
             Text(summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

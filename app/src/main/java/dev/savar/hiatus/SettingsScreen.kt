@@ -38,7 +38,6 @@ fun SettingsScreen(granted: Boolean) {
                 scrollBehavior = scroll,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
             )
         },
