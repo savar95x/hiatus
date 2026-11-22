@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.11.3] - 2026-11-22
+- App icon: more space around the ring, so it sits comfortably in OxygenOS's icon circle like the rest of your apps.
+
 ## [0.11.2] - 2026-11-21
 - Widget tab: icons on every setting (Text, Fonts, Look, On tap, and the rows inside them).
 - The top bar now takes Material's tinted surface colour once the page scrolls under it, on all three tabs.
