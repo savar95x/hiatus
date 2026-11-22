@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.11.4] - 2026-11-22
+- App icon: the ring is a touch smaller, so it matches Aria, Minutia and Regista on the home screen.
+
 ## [0.11.3] - 2026-11-22
 - App icon: more space around the ring, so it sits comfortably in OxygenOS's icon circle like the rest of your apps.
 
