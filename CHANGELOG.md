@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.0] - 2026-11-24
+- Updates work the same way in all four of your apps now: checked whenever you open Hiatus, shown as a card on Home and in Settings → About (never a pop-up). Update downloads once (resuming if cut off) and installs in one tap.
+- Pure black: the top bar stays black when you scroll, like your other apps.
+- Settings: every row has an icon, the same round tonal icons as Aria, Minutia, Hiatus and Regista.
+- Text uses Aria's styles: bolder titles, no stretched letter spacing.
+- New Settings → Font: any Google Font for the app, with size, weight and letter spacing (the same page as Aria).
+- Theme reads System / Light / Dark, like your other apps.
+
 ## [0.11.4] - 2026-11-22
 - App icon: the ring is a touch smaller, so it matches Aria, Minutia and Regista on the home screen.
 
