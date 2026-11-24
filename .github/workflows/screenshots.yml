@@ -29,7 +29,9 @@ jobs:
           gradle-version: current
 
       - name: Render screenshots
-        run: gradle :app:testDebugUnitTest --tests 'dev.savar.hiatus.Screenshots' --stacktrace
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest --tests 'dev.savar.hiatus.Screenshots' --stacktrace 2>&1 | tee /tmp/gradle.log
 
       # Artifacts aren't reachable from every review environment, git is: publish the PNGs as a single-commit
       # orphan branch "shots" (force-pushed, so history doesn't pile up).
@@ -37,6 +39,7 @@ jobs:
         if: always()
         run: |
           mkdir -p /tmp/shots && cp app/build/shots/*.png /tmp/shots/ 2>/dev/null || true
+          cp /tmp/gradle.log /tmp/shots/gradle.log 2>/dev/null || true
           cd /tmp/shots
           echo "${{ github.sha }}" > SHA
           git init -q -b shots
