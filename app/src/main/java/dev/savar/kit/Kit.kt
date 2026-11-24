@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -245,7 +246,7 @@ fun <T> KitSegmented(
     selected: T,
     label: (T) -> String,
     modifier: Modifier = Modifier,
-    shape: Shape? = null,
+    shape: CornerBasedShape? = null,
     onSelect: (T) -> Unit,
 ) {
     SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
@@ -272,7 +273,7 @@ fun KitIconTitle(icon: ImageVector?, title: String, iconShape: Shape = CircleSha
 
 /** Light / dark choice, the same in every app's settings. [selected]: 0 = follow the system, 1 = light, 2 = dark. */
 @Composable
-fun ThemeRow(selected: Int, iconShape: Shape = CircleShape, segmentShape: Shape? = null, onSelect: (Int) -> Unit) {
+fun ThemeRow(selected: Int, iconShape: Shape = CircleShape, segmentShape: CornerBasedShape? = null, onSelect: (Int) -> Unit) {
     KitPad {
         KitIconTitle(Icons.Rounded.DarkMode, "Theme", iconShape)
         Spacer(Modifier.height(12.dp))
