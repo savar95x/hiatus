@@ -2,6 +2,10 @@
 
 package dev.savar.hiatus
 
+import dev.savar.kit.Kit
+import dev.savar.kit.KitApp
+import dev.savar.kit.Updates
+
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
@@ -25,6 +29,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** What the shared kit needs to know about Hiatus. */
+val HiatusKit = KitApp(name = "Hiatus", repo = "savar95x/hiatus", apkName = { "Hiatus-$it.apk" })
+
 enum class Tab(val title: String, val icon: ImageVector) {
     HOME("Away", Icons.Rounded.SelfImprovement),
     WIDGET("Widget", Icons.Rounded.Widgets),
@@ -39,6 +46,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        Kit.init(HiatusKit)
         handle(intent)
         setContent { HiatusTheme { App(tab) { tab = it } } }
     }
@@ -67,7 +75,7 @@ fun App(tab: Tab, onTab: (Tab) -> Unit) {
         if (now != granted) Widgets.refresh(ctx) // the widget was showing "Tap to set up"
         granted = now
         tick++
-        Updates.check(ctx) // at most once an hour; a newer release shows on Home
+        Updates.onResume(ctx) // a newer release shows as a card on Home
         onPauseOrDispose { }
     }
     val rules = Prefs.rules

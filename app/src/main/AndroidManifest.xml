@@ -49,7 +49,7 @@
         </activity>
 
         <receiver
-            android:name=".InstallReceiver"
+            android:name="dev.savar.kit.UpdateReceiver"
             android:exported="false" />
 
         <receiver

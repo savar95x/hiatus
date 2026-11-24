@@ -20,19 +20,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import androidx.compose.runtime.remember
+import dev.savar.kit.AppFont
+import dev.savar.kit.kitTypography
+import dev.savar.kit.pureBlack
 
-/** Pure black (AMOLED) take on a dark scheme: the page goes to #000, raised surfaces keep a hint of tone. */
-internal fun ColorScheme.pureBlack(): ColorScheme = copy(
-    background = Color.Black,
-    surface = Color.Black,
-    surfaceDim = Color.Black,
-    surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = lerp(Color.Black, surfaceContainerLow, 0.5f),
-    surfaceContainer = lerp(Color.Black, surfaceContainer, 0.6f),
-    surfaceContainerHigh = lerp(Color.Black, surfaceContainerHigh, 0.7f),
-    surfaceContainerHighest = lerp(Color.Black, surfaceContainerHighest, 0.78f),
-    surfaceVariant = lerp(Color.Black, surfaceVariant, 0.75f),
-)
 
 @Composable
 internal fun isAppDark(): Boolean = when (Prefs.theme) {
@@ -40,6 +32,10 @@ internal fun isAppDark(): Boolean = when (Prefs.theme) {
     ThemeMode.LIGHT -> false
     ThemeMode.DARK -> true
 }
+
+/** Dark theme with pure black on: top bars stay black when content scrolls under them. */
+@Composable
+internal fun isPureBlack(): Boolean = isAppDark() && Prefs.pureBlack
 
 /** Material 3 Expressive with the wallpaper's colours (Material You); plain Material colours before Android 12. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -54,6 +50,9 @@ fun HiatusTheme(content: @Composable () -> Unit) {
         else -> lightColorScheme()
     }
     val scheme = if (dark && Prefs.pureBlack) base.pureBlack() else base
+    AppFont.load(ctx)
+    val font = AppFont.settings
+    val typography = remember(font) { kitTypography(font) }
     val view = LocalView.current
     if (!view.isInEditMode) SideEffect {
         (ctx as? Activity)?.window?.let { w ->
@@ -64,7 +63,7 @@ fun HiatusTheme(content: @Composable () -> Unit) {
             }
         }
     }
-    MaterialExpressiveTheme(colorScheme = scheme, motionScheme = MotionScheme.expressive(), content = content)
+    MaterialExpressiveTheme(colorScheme = scheme, motionScheme = MotionScheme.expressive(), typography = typography, content = content)
 }
 
 /**

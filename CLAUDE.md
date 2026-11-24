@@ -7,6 +7,14 @@ presets or other widget styles. The widget editor was deliberately trimmed in 0.
 minSdk 29 · targetSdk 36 · compileSdk 37. Owner: Savar Verma (GitHub `savar95x`), daily driver **OnePlus 13s,
 OxygenOS 16**. Sibling projects with the same conventions: `savar95x/minutia`, `savar95x/aria-player`.
 
+## Shared kit (`dev.savar.kit`, Nov 2026)
+Aria, Minutia, Hiatus and Regista share byte-identical files in `app/src/main/java/dev/savar/kit/` (updater +
+update card/row, top bar colours, pure black, settings rows with tonal icons, Aria's text styles, app font page +
+typeface picker). **Never edit them in one repo only**: change, copy to all four, ship all four. See
+[`docs/KIT.md`](docs/KIT.md); `scripts/kit-check.sh` diffs against the other repos. Owner decisions (Nov 2026): icons on
+every settings row; in pure black the top bar stays black when scrolled; updates only as a card, never a pop-up;
+the same Font row/page in every app.
+
 ## Golden rules
 1. **Never change the signing key (`app/release.jks`) or `applicationId`.** Installed copies couldn't update.
 2. **Every shipped change = version bump (`version.properties`) + `CHANGELOG.md` entry in the same push.**
@@ -37,11 +45,11 @@ branch `shots`; `scripts/shots.sh` waits and extracts them to `out/shots/`. Work
 | `Prefs.kt` | Observable app settings: `Rules`, theme, pure black. `setRules` refreshes widgets. |
 | `Style.kt` | The widget's whole look (one `Style` for all instances), JSON in prefs `style`/`v2`: label, caption, format (incl. 2.8h), number/label/caption fonts + sizes, theme, background, `clock`, tap. No alignment (owner removed it). `parse` migrates older styles (`textFont` → label+caption). |
 | `Render.kt` | `Renderer.render()` draws the widget bitmap; used by the widget **and** the editor preview. Palettes from Material You roles (`system_*` by name, tonal shades before Android 14); dark surface = container mixed 25% to black. Size classes (0.11): 1×1 = number only, centred, two lines if bigger; wide & short = number left, label/caption stacked right; else label top, number + caption bottom (number on two lines for tall/square when clearly bigger), plus a hairline day strip at ≥ 250×150 dp. Caption = "From 7:12 AM to 4:25 PM" with shorter fallbacks (`Fmt.windowShort`). Optional thin faint clock top-right. |
-| `Theme.kt` `Sem` | Analytics colour: green = away (the only accent since 0.11; in-use/sleep are neutral). Apps get per-app colours from their icons (`AppIcons.color`). No icons in Home tiles or Settings rows; the Widget tab rows do have icons (owner, 0.11.2). Top bars use the default scrolled colour (surfaceContainer). |
+| `Theme.kt` `Sem` | Analytics colour: green = away (the only accent since 0.11; in-use/sleep are neutral). Apps get per-app colours from their icons (`AppIcons.color`). No icons in Home tiles; every Settings and Widget row has an icon (owner, 0.12.0). Top bars: `kitTopBarColors` (tinted when scrolled, black in pure black). |
 | `Widget.kt` | Provider, `Widgets.refresh` (coalesced, single thread, reuses today's numbers for 2 min on look edits), `ScreenWatch` (unlock → redraw; screen-off → arm a non-waking alarm delivered on next wake), `Alarms` (half-hourly inexact + midnight, all non-waking), tap intents. Root layout `widget` uses `@android:id/background` so the launcher rounds it like its own widgets;  |
 | `Home.kt` | Home: hero, day strip, week (arrows through history), breaks, check-ins, apps (live days only; not in `History`), `AccessGate`. `HomeContent` is pure (screenshots). |
 | `Editor.kt` | Widget tab (0.11), modelled on Minutia: main page = scrolling preview + rows (Text, Fonts, Look, On tap) with current values, ⋮ Reset; each opens a sub-page (pinned 168dp preview, shared-axis X slide, depth-based direction). Fonts page: Number / Label / Below the number groups, each typeface row + weight slider + size slider → `TypefacePage` (pinned search + category chips; System default, From a file = picker straight away, Suggested = `Fonts.googleSuggestions` (owner's picks, no Roboto), all Google Fonts). `FontLoader` downloads/imports. Saves and pushes each change. |
-| `Updater.kt`, `UpdateUi.kt` | In-app updates (0.9.0): `Updates.check` on resume (hourly, ETag) against `releases/latest`; APK kept in `noBackupFilesDir/updates`, resumed with Range, prefetched on unmetered, verified (same package, newer) and deleted once installed; installed via `PackageInstaller` session (`USER_ACTION_NOT_REQUIRED` on 12+), `InstallReceiver` launches the confirm screen. `UpdateCard` on Home, `UpdateSettingsRow` in About. Relies on the release asset being the `.apk` CI publishes. |
+| `dev/savar/kit/*` | Shared kit (see above): `Updates` (checked in `App`'s resume effect), `UpdateCard` on Home, `UpdateRow` in Settings → About, app font (`AppFont`, Settings → Font → Typeface sub-pages). |
 | `SettingsScreen.kt`, `MainActivity.kt`, `Theme.kt`, `Ui.kt`, `Fonts.kt`, `Format.kt`, `Sample.kt` | Settings tab; activity + bottom nav (also the widget's configure screen); theme; shared rows/groups/pickers; Google Fonts download (TTF via plain user agents); formatting; sample data. |
 
 Icon: `res/drawable/ic_launcher_*.xml`, a ring (r 18, stroke 8.2, gap top-right) with a coral dot in the gap;
