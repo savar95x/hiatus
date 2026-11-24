@@ -2,6 +2,8 @@
 
 package dev.savar.hiatus
 
+import dev.savar.kit.kitTopBarColors
+
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.graphics.Typeface
@@ -127,9 +129,7 @@ fun WidgetEditor(day: Day?, rules: Rules) {
                         }
                     },
                     scrollBehavior = scroll,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
+                    colors = kitTopBarColors(isPureBlack()),
                 )
             },
         ) { pad ->

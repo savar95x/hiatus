@@ -2,6 +2,15 @@
 
 package dev.savar.hiatus
 
+import dev.savar.kit.KitGroup
+import dev.savar.kit.KitGroupScope
+import dev.savar.kit.KitIconTitle
+import dev.savar.kit.KitSegmented
+import dev.savar.kit.KitNavRow
+import dev.savar.kit.KitPad
+import dev.savar.kit.KitRowIcon
+import dev.savar.kit.KitSwitchRow
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -54,103 +63,34 @@ import kotlin.math.roundToInt
 
 // ------------------------------------------------------------------ groups (Android 16 Settings style)
 
-internal class GroupScope {
-    val items = mutableListOf<@Composable () -> Unit>()
-    fun item(content: @Composable () -> Unit) { items += content }
-}
+internal typealias GroupScope = KitGroupScope
 
-/** A titled group of rows: each row its own tonal container, 2dp apart, big corners outside, small inside. */
+/** A titled group of rows: the shared kit's (each row its own tonal tile, 2dp apart, big corners outside). */
 @Composable
-internal fun Group(title: String? = null, modifier: Modifier = Modifier, build: GroupScope.() -> Unit) {
-    val items = GroupScope().apply(build).items
-    if (items.isEmpty()) return
-    Column(modifier.fillMaxWidth()) {
-        if (title != null) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
-            )
-        }
-        Column(
-            Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow)),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            items.forEachIndexed { i, content ->
-                val big = 24.dp
-                val small = 6.dp
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    shape = RoundedCornerShape(
-                        topStart = if (i == 0) big else small, topEnd = if (i == 0) big else small,
-                        bottomStart = if (i == items.lastIndex) big else small, bottomEnd = if (i == items.lastIndex) big else small,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { content() }
-            }
-        }
-    }
-}
+internal fun Group(title: String? = null, modifier: Modifier = Modifier, build: GroupScope.() -> Unit) =
+    KitGroup(title, modifier, build = build)
 
 /** Free-form content inside a group row. */
 @Composable
-internal fun Pad(content: @Composable ColumnScope.() -> Unit) {
-    // Same insets as ListItem (16 start, 24 end), so icons and titles line up across all rows.
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 24.dp, top = 16.dp, bottom = 16.dp), content = content)
-}
+internal fun Pad(content: @Composable ColumnScope.() -> Unit) = KitPad(content)
 
 /** A row title with its round icon, as in ListItem; [trailing] sits at the end (e.g. a slider's value). */
 @Composable
-internal fun IconTitle(icon: ImageVector?, title: String, trailing: (@Composable () -> Unit)? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (icon != null) { RowIcon(icon); Spacer(Modifier.width(16.dp)) }
-        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        trailing?.invoke()
-    }
-}
+internal fun IconTitle(icon: ImageVector?, title: String, trailing: (@Composable () -> Unit)? = null) =
+    KitIconTitle(icon, title, trailing = trailing)
 
 @Composable
 internal fun RowIcon(icon: ImageVector, container: Color = MaterialTheme.colorScheme.secondaryContainer,
-                     tint: Color = MaterialTheme.colorScheme.onSecondaryContainer) {
-    Box(Modifier.size(40.dp).clip(CircleShape).background(container), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-    }
-}
+                     tint: Color = MaterialTheme.colorScheme.onSecondaryContainer) = KitRowIcon(icon, container, tint)
 
 @Composable
-internal fun NavRow(title: String, value: String?, icon: ImageVector? = null, onClick: () -> Unit) {
-    ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
-        leadingContent = icon?.let { { RowIcon(it) } },
-        headlineContent = { Text(title) },
-        supportingContent = value?.let { { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) } },
-        trailingContent = {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
-}
+internal fun NavRow(title: String, value: String?, icon: ImageVector? = null, onClick: () -> Unit) =
+    KitNavRow(title, value, icon, onClick = onClick)
 
 @Composable
 internal fun SwitchRow(title: String, checked: Boolean, summary: String? = null, enabled: Boolean = true,
-                       icon: ImageVector? = null, onChange: (Boolean) -> Unit) {
-    ListItem(
-        modifier = Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
-        leadingContent = icon?.let { { RowIcon(it) } },
-        headlineContent = { Text(title) },
-        supportingContent = summary?.let { { Text(it) } },
-        trailingContent = {
-            Switch(
-                checked = checked, onCheckedChange = null, enabled = enabled,
-                thumbContent = if (checked) {
-                    { Icon(Icons.Rounded.Check, null, Modifier.size(SwitchDefaults.IconSize)) }
-                } else null,
-            )
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
-}
+                       icon: ImageVector? = null, onChange: (Boolean) -> Unit) =
+    KitSwitchRow(title, checked, summary, enabled, icon, onChange = onChange)
 
 /** A slider with its title and current value. [onChange] fires while dragging. */
 @Composable
@@ -205,17 +145,7 @@ internal fun <T> ChoiceRow(title: String?, options: List<T>, selected: T, label:
 /** Material 3 connected segmented buttons for 2–4 short options. */
 @Composable
 internal fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, modifier: Modifier = Modifier,
-                           onSelect: (T) -> Unit) {
-    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
-        options.forEachIndexed { i, o ->
-            SegmentedButton(
-                selected = o == selected,
-                onClick = { onSelect(o) },
-                shape = SegmentedButtonDefaults.itemShape(index = i, count = options.size),
-            ) { Text(label(o), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-        }
-    }
-}
+                           onSelect: (T) -> Unit) = KitSegmented(options, selected, label, modifier, onSelect = onSelect)
 
 @Composable
 internal fun Reveal(visible: Boolean, content: @Composable ColumnScope.() -> Unit) {

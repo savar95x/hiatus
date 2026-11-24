@@ -1,5 +1,13 @@
 package dev.savar.hiatus
 
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
+import dev.savar.kit.AppFont
+import dev.savar.kit.FontSettings
+import dev.savar.kit.Kit
+import dev.savar.kit.Release
+import dev.savar.kit.Updates
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -96,6 +104,8 @@ class Screenshots {
     // ------------------------------------------------------------------ screens
 
     private fun screen(name: String, dark: Boolean, black: Boolean = false, after: () -> Unit = {}, content: @Composable () -> Unit) {
+        Kit.init(HiatusKit)
+        AppFont.force(FontSettings())
         Prefs.init(ctx)
         Prefs.setTheme(ctx, if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
         Prefs.setPureBlack(ctx, black)
@@ -128,11 +138,11 @@ class Screenshots {
 
     @Test fun update_card() {
         val r = Rules(); val d = home(r)
-        Updates.showForPreview(Updates.State.Available(Release("0.9.0",
+        Updates.force(Updates.State.Available(Release("0.9.0",
             "- Update Hiatus from inside the app.\n- Checks GitHub at most once an hour.\n- Downloads once, resumes if cut off.",
             "", 2_900_000L)))
         screen("update_card", true) { HomeContent(d, r) {} }
-        Updates.showForPreview(Updates.State.Idle)
+        Updates.force(Updates.State.Idle)
     }
 
     @Test fun access() = screen("access", false) { AccessGate() }
@@ -154,6 +164,19 @@ class Screenshots {
 
     @Config(qualifiers = "w411dp-h1800dp-xxhdpi")
     @Test fun settings() = screen("settings", true) { SettingsScreen(true) }
+
+    /** Pure black, scrolled: the top bar must stay black like the page (the kit's bar colours). */
+    @Config(qualifiers = "w411dp-h914dp-xxhdpi")
+    @Test fun settings_black_scrolled() = screen("settings_black_scrolled", true, black = true,
+        after = { compose.onRoot().performTouchInput { swipeUp(startY = bottom * 0.8f, endY = top + 50f) } }) { SettingsScreen(true) }
+
+    @Config(qualifiers = "w411dp-h914dp-xxhdpi")
+    @Test fun settings_dark_scrolled() = screen("settings_dark_scrolled", true,
+        after = { compose.onRoot().performTouchInput { swipeUp(startY = bottom * 0.8f, endY = top + 50f) } }) { SettingsScreen(true) }
+
+    @Config(qualifiers = "w411dp-h1400dp-xxhdpi")
+    @Test fun settings_font() = screen("settings_font", true,
+        after = { compose.onNodeWithText("Font").performClick() }) { SettingsScreen(true) }
 
     @Config(qualifiers = "w411dp-h914dp-xxhdpi")
     @Test fun app_nav() = screen("app", true) { App(Tab.SETTINGS) {} }

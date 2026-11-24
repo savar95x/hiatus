@@ -2,6 +2,9 @@
 
 package dev.savar.hiatus
 
+import dev.savar.kit.UpdateCard
+import dev.savar.kit.kitTopBarColors
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -89,9 +92,7 @@ fun HomeContent(data: HomeData?, rules: Rules, onWeek: (Int) -> Unit) {
             LargeTopAppBar(
                 title = { Text(if (day == null) "Hiatus" else dayTitle(day, data!!.now)) },
                 scrollBehavior = scroll,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+                colors = kitTopBarColors(isPureBlack()),
             )
         },
     ) { pad ->
