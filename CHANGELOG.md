@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.12.1] - 2026-11-26
+- Text is back to Material 3's standard styles (sizes, weights and spacing as Google ships them), in all four of your apps.
+
 ## [0.12.0] - 2026-11-24
 - Updates work the same way in all four of your apps now: checked whenever you open Hiatus, shown as a card on Home and in Settings → About (never a pop-up). Update downloads once (resuming if cut off) and installs in one tap.
 - Pure black: the top bar stays black when you scroll, like your other apps.
