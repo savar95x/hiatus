@@ -6,6 +6,12 @@
 
 <p align="center"><a href="../../releases/latest"><b>Download the latest APK</b></a></p>
 
+<p align="center">
+  <img src="docs/screenshots/today.webp" width="270" alt="Today: away 3h 18m, the day as a strip, this week" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/widget.webp" width="270" alt="Widget tab: live preview and the Text, Fonts and Look rows" />
+</p>
+
 Hiatus counts the time you *didn't* use your phone. The widget shows today's total at a glance; the app shows
 your breaks, how often you check your phone, and which apps pull you back. Everything is read on the phone from
 Android's usage events. Nothing leaves the device.
